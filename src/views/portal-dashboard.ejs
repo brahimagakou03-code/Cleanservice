@@ -1,0 +1,744 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+  <title>Espace client — <%= customer.companyName %></title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="/public/styles/app.css" rel="stylesheet">
+  <style>
+    .portal-dashboard-page {
+      max-width: 1720px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .portal-sidebar-col {
+      align-self: flex-start;
+      min-width: 0;
+    }
+    .portal-sidebar-stack {
+      display: flex;
+      flex-direction: column;
+    }
+    .portal-sidebar-block--panier {
+      padding-bottom: 1.5rem;
+      margin-bottom: 1.5rem;
+      border-bottom: 2px solid rgba(15, 63, 113, 0.14);
+    }
+    @media (min-width: 992px) {
+      .portal-sidebar-block--panier {
+        padding-bottom: 1.75rem;
+        margin-bottom: 1.75rem;
+      }
+    }
+    .portal-sidebar-block--suivi {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .portal-cart-sticky {
+      position: static;
+      transform: none;
+      backface-visibility: visible;
+    }
+    @media (min-width: 992px) {
+      .portal-cart-sticky {
+        position: sticky;
+        top: 1rem;
+        transform: translateZ(0);
+        backface-visibility: hidden;
+      }
+    }
+    .portal-product-img { height: 96px; object-fit: cover; width: 100%; background: #eef2f6; }
+    #productGrid > .portal-product-col {
+      flex: 0 0 auto;
+      width: 100%;
+    }
+    @media (min-width: 520px) {
+      #productGrid > .portal-product-col { width: 50%; }
+    }
+    @media (min-width: 768px) {
+      #productGrid > .portal-product-col { width: 33.333333%; }
+    }
+    @media (min-width: 992px) {
+      #productGrid > .portal-product-col { width: 25%; }
+    }
+    @media (min-width: 1200px) {
+      #productGrid > .portal-product-col { width: 20%; }
+    }
+    @media (min-width: 1600px) {
+      #productGrid > .portal-product-col { width: 16.666667%; }
+    }
+    .portal-product-col { content-visibility: auto; contain-intrinsic-size: auto 260px; }
+    .portal-product-card .card-body { padding: 0.65rem 0.75rem; }
+    .portal-product-name { font-size: 0.9375rem; font-weight: 600; line-height: 1.3; color: var(--cs-text, #16324f); }
+    .portal-product-sku { font-size: 0.75rem; letter-spacing: 0.02em; }
+    .portal-product-desc {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      font-size: 0.8125rem;
+      line-height: 1.35;
+      color: #5c6d80;
+      margin-bottom: 0.35rem;
+    }
+    .portal-product-price { font-size: 1rem; font-weight: 700; color: var(--cs-primary, #0f3f71); }
+    .portal-section-banner .portal-section-title { font-size: 0.95rem; font-weight: 700; letter-spacing: 0.02em; }
+    .portal-subsection-banner .portal-subsection-title { font-size: 0.8rem; }
+    @media (hover: hover) {
+      .portal-product-card { transition: box-shadow .15s ease; }
+      .portal-product-card:hover { box-shadow: 0 .25rem .75rem rgba(0,0,0,.08); }
+    }
+    #portalCatalogUpdateToast { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 1080; max-width: min(520px, 94vw); box-shadow: 0 .35rem 1.2rem rgba(0,0,0,.12); }
+    .portal-cart-lines {
+      list-style: none;
+      padding-left: 0;
+      margin-bottom: 0;
+      max-height: min(48vh, 380px);
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .portal-cart-item {
+      border: 1px solid rgba(15, 63, 113, 0.12);
+      border-radius: 10px;
+      padding: 0.5rem 0.6rem;
+      margin-bottom: 0.5rem;
+      background: #fff;
+    }
+    .portal-cart-item:last-child { margin-bottom: 0; }
+    .portal-cart-item-title {
+      font-weight: 600;
+      font-size: 0.8125rem;
+      line-height: 1.25;
+      word-break: break-word;
+    }
+    .portal-cart-item-meta {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.35rem 0.5rem;
+      margin-top: 0.45rem;
+    }
+    .portal-cart-qty-group {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.15rem;
+      flex-shrink: 0;
+    }
+    .portal-cart-qty-group .btn {
+      min-width: 1.75rem;
+      padding: 0.15rem 0.35rem;
+      line-height: 1.2;
+    }
+    .portal-cart-qty-val {
+      min-width: 1.25rem;
+      text-align: center;
+      font-size: 0.875rem;
+      font-weight: 600;
+    }
+    .portal-cart-totals {
+      line-height: 1.45;
+      padding-top: 0.35rem;
+      border-top: 1px solid rgba(15, 63, 113, 0.1);
+    }
+    .portal-cart-sticky .card-body {
+      overflow: visible;
+    }
+    .portal-sidebar-col .form-select,
+    .portal-sidebar-col textarea.form-control {
+      max-width: 100%;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .portal-sidebar-col textarea.form-control {
+      min-height: 4.25rem;
+      line-height: 1.45;
+      padding: 0.5rem 0.65rem;
+      resize: vertical;
+    }
+    @media (max-width: 991.98px) {
+      body.portal-mobile-checkout-pad {
+        padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+      }
+    }
+    .portal-mobile-checkout-bar {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 1020;
+      padding: 0.6rem 1rem calc(0.6rem + env(safe-area-inset-bottom, 0px));
+      background: rgba(255, 255, 255, 0.98);
+      border-top: 1px solid rgba(15, 63, 113, 0.14);
+      box-shadow: 0 -6px 28px rgba(15, 63, 113, 0.12);
+      backdrop-filter: blur(8px);
+    }
+    .portal-mobile-checkout-bar .portal-mobile-checkout-total {
+      font-size: 0.8rem;
+      color: #5c6d80;
+    }
+    #cartEmpty {
+      margin-bottom: 1rem;
+    }
+  </style>
+</head>
+<body class="bg-light">
+  <%- include("partials/portal-header") %>
+  <div class="container-fluid portal-dashboard-page py-4 pb-5 px-3 px-md-4">
+    <div class="mb-4">
+      <h1 class="h4 mb-1">Bonjour, <%= customer.companyName %></h1>
+      <p class="cs-subtle small mb-0">Code client <strong class="text-dark"><%= customer.code %></strong><% if (typeof portalUnreadCount !== "undefined" && portalUnreadCount > 0) { %> · <span class="text-primary fw-semibold"><%= portalUnreadCount %> notification<%= portalUnreadCount > 1 ? "s" : "" %> non lue<%= portalUnreadCount > 1 ? "s" : "" %> (cloche en haut)</span><% } %></p>
+    </div>
+
+    <% if (typeof orderSuccess !== "undefined" && orderSuccess) { %>
+      <div class="alert alert-success border-0 shadow-sm">Votre commande a bien été <strong>enregistrée</strong>. Votre fournisseur la traite : aucun paiement n’est demandé ici. Vous serez facturé selon vos conditions habituelles ; les factures apparaissent ci-dessous lorsqu’elles sont disponibles.</div>
+    <% } %>
+    <% if (typeof orderError !== "undefined" && orderError) { %>
+      <div class="alert alert-danger border-0"><%= orderError %></div>
+    <% } %>
+
+    <div class="alert alert-light border mb-4 small">
+      <strong>Comment ça marche ?</strong> Parcourez le catalogue, ajoutez des produits au <strong>panier</strong>, choisissez les adresses de livraison / facturation puis validez. Il n’y a <strong>pas de paiement par carte</strong> sur cet espace : la commande est prise en charge par l’équipe administrative, qui prépare l’envoi et émet les <strong>factures</strong> (PDF téléchargeable lorsqu’elles sont finalisées).
+    </div>
+
+    <% if (!sites || !sites.length) { %>
+      <div class="alert alert-warning">Aucun site de livraison n’est configuré pour votre compte. Contactez votre fournisseur pour pouvoir commander.</div>
+    <% } %>
+
+    <div class="row g-4">
+      <div class="col-lg-9">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white border-bottom py-3">
+            <h2 class="h5 mb-1">Catalogue</h2>
+            <% if (products && products.length) { %>
+              <p class="small text-muted mb-3"><%= products.length %> référence<%= products.length > 1 ? "s" : "" %> au catalogue. Les articles en <strong>rupture de stock</strong> restent visibles mais ne peuvent pas être ajoutés au panier.</p>
+            <% } %>
+            <% var _filterSecs = typeof catalogFilterSections !== "undefined" ? catalogFilterSections : []; %>
+            <div class="row g-2 g-lg-3 align-items-end">
+              <div class="col-12 col-md-6 col-xl-4">
+                <label for="productSearch" class="form-label small text-muted mb-1">Recherche</label>
+                <input type="search" id="productSearch" class="form-control form-control-sm" placeholder="Nom, référence…" autocomplete="off">
+              </div>
+              <div class="col-6 col-md-3 col-xl-2">
+                <label for="portalFilterSection" class="form-label small text-muted mb-1">Famille</label>
+                <select id="portalFilterSection" class="form-select form-select-sm">
+                  <option value="">Toutes</option>
+                  <% _filterSecs.forEach(function(s) { %>
+                    <option value="<%= s.slug %>"><%= s.label %></option>
+                  <% }) %>
+                </select>
+              </div>
+              <div class="col-6 col-md-3 col-xl-2">
+                <label for="portalFilterSubsection" class="form-label small text-muted mb-1">Rayon</label>
+                <select id="portalFilterSubsection" class="form-select form-select-sm">
+                  <option value="">Tous les rayons</option>
+                </select>
+              </div>
+              <div class="col-6 col-md-3 col-xl-2">
+                <label for="portalFilterPrice" class="form-label small text-muted mb-1">Prix HT</label>
+                <select id="portalFilterPrice" class="form-select form-select-sm">
+                  <option value="">Tous</option>
+                  <option value="0-10">Moins de 10 €</option>
+                  <option value="10-25">10 € – 25 €</option>
+                  <option value="25-50">25 € – 50 €</option>
+                  <option value="50-100">50 € – 100 €</option>
+                  <option value="100+">Plus de 100 €</option>
+                </select>
+              </div>
+              <div class="col-6 col-md-3 col-xl-2 d-flex align-items-end">
+                <button type="button" class="btn btn-outline-secondary btn-sm w-100" id="portalFilterReset">Réinitialiser</button>
+              </div>
+            </div>
+            <% if (_filterSecs.length) { %>
+              <script type="application/json" id="portalSubsectionsFlat"><%- JSON.stringify(typeof catalogFilterSubsectionsFlat !== "undefined" ? catalogFilterSubsectionsFlat : []) %></script>
+              <script type="application/json" id="portalSectionLabels"><%- JSON.stringify(Object.fromEntries(_filterSecs.map(function(s){ return [s.slug, s.label]; }))) %></script>
+            <% } %>
+          </div>
+          <div class="card-body p-3">
+            <% if (!products || !products.length) { %>
+              <p class="text-muted mb-0">Aucun produit disponible pour le moment.</p>
+            <% } else { %>
+              <div class="row g-2 g-md-3" id="productGrid">
+                <% var __sec = null, __sub = null, __firstSec = true; %>
+                <% products.forEach(function(p) { %>
+                  <% if (p.sectionTitle !== __sec) { __sec = p.sectionTitle; __sub = null; %>
+                    <div class="col-12 portal-section-banner <%= __firstSec ? '' : 'mt-3 pt-3 border-top' %>" data-portal-section="<%= p.sectionSlug %>">
+                      <h3 class="h6 text-primary mb-0 portal-section-title"><%= __sec %></h3>
+                    </div>
+                    <% __firstSec = false; %>
+                  <% } %>
+                  <% if (p.subsectionTitle && p.subsectionTitle !== __sub) { __sub = p.subsectionTitle; %>
+                    <div class="col-12 portal-subsection-banner" data-portal-section="<%= p.sectionSlug %>" data-portal-subsection="<%= p.subsectionSlug %>">
+                      <h4 class="small text-muted fw-semibold mb-0 mt-2 portal-subsection-title"><%= __sub %></h4>
+                    </div>
+                  <% } %>
+                  <div class="col-12 portal-product-col" data-search="<%= p.searchKey %>" data-section="<%= p.sectionSlug %>" data-subsection="<%= p.subsectionSlug %>" data-price="<%= Number(p.price) %>">
+                    <div class="card h-100 portal-product-card border position-relative <%= p.orderable ? '' : 'border-warning border-2' %>">
+                      <% if (!p.orderable) { %>
+                        <span class="position-absolute top-0 end-0 m-2 badge text-bg-warning text-dark shadow-sm z-1">Rupture</span>
+                      <% } %>
+                      <% if (p.image) { %>
+                        <img class="portal-product-img card-img-top" src="<%= p.image %>" alt="" loading="lazy" decoding="async">
+                      <% } else { %>
+                        <div class="portal-product-img d-flex align-items-center justify-content-center text-muted" style="font-size:.72rem">Pas d’image</div>
+                      <% } %>
+                      <div class="card-body d-flex flex-column">
+                        <h3 class="card-title portal-product-name mb-1"><%= p.name %></h3>
+                        <p class="portal-product-sku text-muted mb-1"><%= p.sku %></p>
+                        <% if (p.descriptionShort) { %>
+                          <p class="portal-product-desc flex-grow-1"><%= p.descriptionShort %></p>
+                        <% } %>
+                        <% if (p.supplierUrl || p.technicalSheetUrl) { %>
+                          <p class="small mb-1 d-flex flex-wrap align-items-center gap-2">
+                            <% if (p.supplierUrl) { %>
+                              <a href="<%= p.supplierUrl %>" target="_blank" rel="noopener noreferrer" class="text-decoration-none">Fiche fournisseur</a>
+                            <% } %>
+                            <% if (p.supplierUrl && p.technicalSheetUrl) { %><span class="text-muted user-select-none" aria-hidden="true">·</span><% } %>
+                            <% if (p.technicalSheetUrl) { %>
+                              <a href="<%= p.technicalSheetUrl %>" target="_blank" rel="noopener noreferrer" class="text-decoration-none">Fiche technique</a>
+                            <% } %>
+                          </p>
+                        <% } %>
+                        <div class="mt-auto pt-1 w-100">
+                          <p class="mb-2"><span class="portal-product-price"><%= Number(p.price).toFixed(2) %> €</span><span class="small text-muted"> HT · TVA <%= p.vatRate %>%</span></p>
+                          <% if (p.orderable) { %>
+                          <div class="d-flex gap-1 gap-sm-2 align-items-stretch flex-column flex-sm-row">
+                            <input type="number" class="form-control form-control-sm qty-input" min="1" value="1" style="width:100%;max-width:4.25rem" aria-label="Quantité pour <%= p.name %>">
+                            <button type="button" class="btn btn-primary btn-sm flex-grow-1 add-to-cart" data-id="<%= p.id %>">Ajouter</button>
+                          </div>
+                          <% } else { %>
+                          <p class="small text-warning-emphasis fw-semibold mb-1">Indisponible à la commande.</p>
+                          <button type="button" class="btn btn-secondary btn-sm w-100" disabled aria-disabled="true">Rupture</button>
+                          <% } %>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                <% }) %>
+              </div>
+            <% } %>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-3 portal-sidebar-col">
+        <div class="portal-sidebar-stack">
+        <section class="portal-sidebar-block portal-sidebar-block--panier" aria-label="Panier et validation de commande">
+        <div class="card border-0 shadow-sm portal-cart-sticky">
+          <div class="card-header bg-primary text-white py-3">
+            <h2 class="h5 mb-0">Panier</h2>
+            <p class="small mb-0 opacity-75">Validez pour envoyer la commande à votre fournisseur</p>
+          </div>
+          <div class="card-body">
+            <% if (sites && sites.length) { %>
+            <form method="POST" action="/portal/orders" id="orderForm">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <input type="hidden" name="linesJson" id="linesJson" value="[]">
+              <div class="mb-3">
+                <label class="form-label small fw-semibold">Livraison</label>
+                <select class="form-select form-select-sm" name="deliverySiteId" required>
+                  <% sites.forEach(function(s){ %>
+                    <option value="<%= s.id %>"><%= s.label %></option>
+                  <% }) %>
+                </select>
+              </div>
+              <div class="mb-3">
+                <label class="form-label small fw-semibold">Facturation</label>
+                <select class="form-select form-select-sm" name="billingSiteId" required>
+                  <% sites.forEach(function(s){ %>
+                    <option value="<%= s.id %>"><%= s.label %></option>
+                  <% }) %>
+                </select>
+              </div>
+              <div id="cartEmpty" class="text-muted small py-3 text-center border rounded bg-white">Votre panier est vide. Ajoutez des produits depuis le catalogue.</div>
+              <div id="cartTableWrap" class="d-none">
+                <ul class="portal-cart-lines" id="cartLinesList" aria-label="Lignes du panier"></ul>
+                <div class="portal-cart-totals small text-muted">
+                  <div class="text-end">Total HT <strong class="text-dark"><span id="sumHt">0.00</span> €</strong></div>
+                  <div class="text-end">TVA <strong class="text-dark"><span id="sumTva">0.00</span> €</strong></div>
+                  <div class="text-end mt-1"><span class="text-uppercase" style="font-size:.7rem;letter-spacing:.04em">Total TTC</span><br><strong class="text-primary fs-6"><span id="sumTtc">0.00</span> €</strong></div>
+                </div>
+              </div>
+              <label class="form-label small mt-3 mb-1" for="portalOrderNotes">Commentaire (optionnel)</label>
+              <textarea id="portalOrderNotes" class="form-control form-control-sm" name="notes" rows="3" placeholder="Ex. consignes de livraison, n° de bon interne…" autocomplete="off"></textarea>
+              <button type="submit" class="btn btn-success w-100 mt-3 d-none d-lg-block" id="submitOrder" disabled>Valider la commande <span class="d-none d-md-inline">(sans paiement en ligne)</span></button>
+            </form>
+            <% } %>
+          </div>
+        </div>
+        </section>
+
+        <section class="portal-sidebar-block portal-sidebar-block--suivi" aria-label="Commandes et factures">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white py-2 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <h3 class="h6 mb-0">Mes dernières commandes</h3>
+            <a href="/portal/commandes" class="btn btn-sm btn-outline-primary">Voir tout l’historique</a>
+          </div>
+          <ul class="list-group list-group-flush small">
+            <% if (!orders || !orders.length) { %>
+              <li class="list-group-item text-muted">Aucune commande pour l’instant.</li>
+            <% } else { %>
+              <% orders.forEach(function(o){ %>
+                <li class="list-group-item d-flex justify-content-between align-items-start gap-2">
+                  <div>
+                    <a href="/portal/commandes/<%= o.id %>" class="fw-semibold text-decoration-none"><%= o.number %></a>
+                    <br><span class="text-muted"><%= fr.orderStatus(o.status) %></span>
+                    <br><span class="text-muted" style="font-size:.8rem"><%= new Date(o.createdAt).toLocaleDateString("fr-FR") %></span>
+                  </div>
+                  <div class="text-end text-nowrap">
+                    <div><%= Number(o.totalTtc).toFixed(2) %> €</div>
+                    <a class="btn btn-link btn-sm p-0" href="/portal/commandes/<%= o.id %>">Détails</a>
+                  </div>
+                </li>
+              <% }) %>
+            <% } %>
+          </ul>
+        </div>
+
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white py-2 border-bottom"><h3 class="h6 mb-0">Mes factures</h3></div>
+          <ul class="list-group list-group-flush small">
+            <% if (!invoices || !invoices.length) { %>
+              <li class="list-group-item text-muted">Aucune facture pour l’instant. Elles apparaîtront après facturation par votre fournisseur.</li>
+            <% } else { %>
+              <% invoices.forEach(function(i){ %>
+                <li class="list-group-item d-flex justify-content-between align-items-start gap-2">
+                  <div>
+                    <strong><%= i.number || "Brouillon" %></strong>
+                    <br>
+                    <span class="text-muted"><%= fr.invoiceStatus(i.status) %></span>
+                    <% if (i.issuedAt) { %>
+                      <br><span class="text-muted" style="font-size:.85em">Émise le <%= new Date(i.issuedAt).toLocaleDateString("fr-FR") %></span>
+                    <% } %>
+                  </div>
+                  <div class="text-end">
+                    <div><%= Number(i.totalTtc).toFixed(2) %> € TTC</div>
+                    <% if (i.pdfUrl) { %>
+                      <a class="btn btn-sm btn-outline-primary mt-1" href="<%= i.pdfUrl %>" target="_blank" rel="noopener noreferrer">Télécharger PDF</a>
+                    <% } else { %>
+                      <span class="text-muted" style="font-size:.8rem">PDF indisponible</span>
+                    <% } %>
+                  </div>
+                </li>
+              <% }) %>
+            <% } %>
+          </ul>
+        </div>
+        </section>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <% if (sites && sites.length) { %>
+  <div id="portalMobileCheckoutBar" class="portal-mobile-checkout-bar d-lg-none d-none" aria-hidden="true">
+    <div class="portal-mobile-checkout-total d-flex justify-content-between align-items-baseline gap-2 mb-2">
+      <span>Total TTC</span>
+      <strong class="text-primary text-nowrap"><span id="sumTtcMobile">0.00</span> €</strong>
+    </div>
+    <button type="submit" form="orderForm" class="btn btn-success w-100 fw-semibold py-2" id="submitOrderMobile" disabled>Valider la commande</button>
+  </div>
+  <% } %>
+
+  <div id="portalCatalogUpdateToast" class="alert alert-primary border-0 shadow d-none mb-0 py-3 px-4" role="status" aria-live="polite">
+    <div class="d-flex flex-wrap align-items-center gap-2 justify-content-between">
+      <span class="small mb-0"><strong>Catalogue mis à jour</strong> par votre fournisseur (prix, produits ou catégories). Actualisez pour voir la dernière version.</span>
+      <div class="d-flex gap-2 flex-shrink-0">
+        <button type="button" class="btn btn-light btn-sm fw-semibold" id="portalCatalogUpdateRefresh">Actualiser la page</button>
+        <button type="button" class="btn btn-outline-light btn-sm" id="portalCatalogUpdateDismiss">Plus tard</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    <% const __productsJson = JSON.stringify(products || []).replace(/</g, "\\u003c").replace(/>/g, "\\u003e"); %>
+    const products = <%- __productsJson %>;
+    let lines = [];
+    const linesJsonEl = document.getElementById("linesJson");
+
+    function lineHt(l) {
+      return Number(l.quantity) * Number(l.unitPriceHt);
+    }
+    function lineTtc(l) {
+      return lineHt(l) * (1 + Number(l.vatRate || 0) / 100);
+    }
+    function renderCart() {
+      const list = document.getElementById("cartLinesList");
+      const empty = document.getElementById("cartEmpty");
+      const wrap = document.getElementById("cartTableWrap");
+      const submit = document.getElementById("submitOrder");
+      const submitMobile = document.getElementById("submitOrderMobile");
+      const mobileBar = document.getElementById("portalMobileCheckoutBar");
+      const sumTtcMobile = document.getElementById("sumTtcMobile");
+      if (!list) return;
+      list.innerHTML = "";
+      let tHt = 0, tTtc = 0;
+      lines.forEach((l, idx) => {
+        const ht = lineHt(l);
+        const ttc = lineTtc(l);
+        tHt += ht;
+        tTtc += ttc;
+        const li = document.createElement("li");
+        li.className = "portal-cart-item";
+        li.innerHTML =
+          "<div class=\"d-flex justify-content-between align-items-start gap-2\">" +
+          "<div class=\"flex-grow-1\" style=\"min-width:0\">" +
+          "<div class=\"portal-cart-item-title\">" + escapeHtml(l.productNameSnapshot) + "</div>" +
+          "<div class=\"text-muted\" style=\"font-size:.72rem\">" + escapeHtml(l.productSkuSnapshot) + "</div>" +
+          "</div>" +
+          "<button type=\"button\" class=\"btn btn-sm btn-link text-danger p-0 flex-shrink-0 cart-remove\" data-i=\"" + idx + "\" style=\"font-size:.75rem;line-height:1.2\">Retirer</button>" +
+          "</div>" +
+          "<div class=\"portal-cart-item-meta\">" +
+          "<span class=\"small text-muted\">" + Number(l.unitPriceHt).toFixed(2) + " € HT</span>" +
+          "<div class=\"portal-cart-qty-group\" role=\"group\" aria-label=\"Quantité\">" +
+          "<button type=\"button\" class=\"btn btn-sm btn-light border cart-qty\" data-i=\"" + idx + "\" data-d=\"-1\" aria-label=\"Diminuer la quantité\">−</button>" +
+          "<span class=\"portal-cart-qty-val\" aria-live=\"polite\">" + l.quantity + "</span>" +
+          "<button type=\"button\" class=\"btn btn-sm btn-light border cart-qty\" data-i=\"" + idx + "\" data-d=\"1\" aria-label=\"Augmenter la quantité\">+</button>" +
+          "</div>" +
+          "<span class=\"small fw-semibold\">" + ttc.toFixed(2) + " € <span class=\"text-muted fw-normal\">TTC</span></span>" +
+          "</div>";
+        list.appendChild(li);
+      });
+      const sumHt = document.getElementById("sumHt");
+      const sumTva = document.getElementById("sumTva");
+      const sumTtc = document.getElementById("sumTtc");
+      if (sumHt) sumHt.textContent = tHt.toFixed(2);
+      if (sumTva) sumTva.textContent = (tTtc - tHt).toFixed(2);
+      if (sumTtc) sumTtc.textContent = tTtc.toFixed(2);
+      if (sumTtcMobile) sumTtcMobile.textContent = tTtc.toFixed(2);
+      if (linesJsonEl) linesJsonEl.value = JSON.stringify(lines);
+      if (lines.length === 0) {
+        if (empty) empty.classList.remove("d-none");
+        if (wrap) wrap.classList.add("d-none");
+        if (submit) submit.disabled = true;
+        if (submitMobile) submitMobile.disabled = true;
+        if (mobileBar) {
+          mobileBar.classList.add("d-none");
+          mobileBar.setAttribute("aria-hidden", "true");
+        }
+        document.body.classList.remove("portal-mobile-checkout-pad");
+      } else {
+        if (empty) empty.classList.add("d-none");
+        if (wrap) wrap.classList.remove("d-none");
+        if (submit) submit.disabled = false;
+        if (submitMobile) submitMobile.disabled = false;
+        if (mobileBar) {
+          mobileBar.classList.remove("d-none");
+          mobileBar.setAttribute("aria-hidden", "false");
+        }
+        document.body.classList.add("portal-mobile-checkout-pad");
+      }
+    }
+    function escapeHtml(s) {
+      const d = document.createElement("div");
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    document.querySelectorAll(".add-to-cart").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (!linesJsonEl) return;
+        const id = btn.getAttribute("data-id");
+        const p = products.find((x) => x.id === id);
+        if (!p || p.orderable === false) return;
+        const card = btn.closest(".portal-product-col");
+        const qtyInp = card ? card.querySelector(".qty-input") : null;
+        const qty = Math.max(1, Number(qtyInp && qtyInp.value) || 1);
+        const existing = lines.findIndex((l) => l.productId === id && Number(l.unitPriceHt) === Number(p.price));
+        if (existing >= 0) lines[existing].quantity += qty;
+        else {
+          lines.push({
+            productId: p.id,
+            productNameSnapshot: p.name,
+            productSkuSnapshot: p.sku,
+            quantity: qty,
+            unitPriceHt: Number(p.price),
+            vatRate: Number(p.vatRate || 0),
+          });
+        }
+        renderCart();
+      });
+    });
+
+    const cartLinesListEl = document.getElementById("cartLinesList");
+    cartLinesListEl && cartLinesListEl.addEventListener("click", (e) => {
+      const q = e.target.closest(".cart-qty");
+      const r = e.target.closest(".cart-remove");
+      if (q) {
+        const i = Number(q.getAttribute("data-i"));
+        const d = Number(q.getAttribute("data-d"));
+        if (lines[i]) {
+          lines[i].quantity += d;
+          if (lines[i].quantity < 1) lines.splice(i, 1);
+          renderCart();
+        }
+      }
+      if (r) {
+        const i = Number(r.getAttribute("data-i"));
+        lines.splice(i, 1);
+        renderCart();
+      }
+    });
+
+    (function initPortalCatalogFilters() {
+      const searchEl = document.getElementById("productSearch");
+      const sectionSel = document.getElementById("portalFilterSection");
+      const subsectionSel = document.getElementById("portalFilterSubsection");
+      const priceSel = document.getElementById("portalFilterPrice");
+      const resetBtn = document.getElementById("portalFilterReset");
+      const flatEl = document.getElementById("portalSubsectionsFlat");
+      const labelsEl = document.getElementById("portalSectionLabels");
+      if (!searchEl || !sectionSel || !subsectionSel) return;
+
+      const productCols = Array.from(document.querySelectorAll(".portal-product-col"));
+      const sectionBanners = Array.from(document.querySelectorAll(".portal-section-banner"));
+      const subsectionBanners = Array.from(document.querySelectorAll(".portal-subsection-banner"));
+      if (!productCols.length) return;
+
+      let flat = [];
+      let sectionLabels = {};
+      try {
+        if (flatEl) flat = JSON.parse(flatEl.textContent);
+        if (labelsEl) sectionLabels = JSON.parse(labelsEl.textContent);
+      } catch (_) {}
+
+      function refillSubsections() {
+        const sec = sectionSel.value;
+        subsectionSel.innerHTML = "";
+        const opt0 = document.createElement("option");
+        opt0.value = "";
+        opt0.textContent = "Tous les rayons";
+        subsectionSel.appendChild(opt0);
+        flat
+          .filter((s) => !sec || s.sectionSlug === sec)
+          .forEach((s) => {
+            const o = document.createElement("option");
+            o.value = `${s.sectionSlug}|||${s.subsectionSlug}`;
+            o.textContent = sec ? s.label : `${sectionLabels[s.sectionSlug] || ""} — ${s.label}`;
+            subsectionSel.appendChild(o);
+          });
+      }
+
+      function priceMatches(price, range) {
+        if (!range) return true;
+        const p = Number(price);
+        if (range === "0-10") return p < 10;
+        if (range === "10-25") return p >= 10 && p < 25;
+        if (range === "25-50") return p >= 25 && p < 50;
+        if (range === "50-100") return p >= 50 && p < 100;
+        if (range === "100+") return p >= 100;
+        return true;
+      }
+
+      function applyPortalProductFilters() {
+        const q = (searchEl.value || "").toLowerCase().trim();
+        const section = sectionSel.value || "";
+        const subsectionVal = subsectionSel.value || "";
+        const priceRange = priceSel ? priceSel.value || "" : "";
+        let subSec = "";
+        let subSub = "";
+        const sep = "|||";
+        const idx = subsectionVal.indexOf(sep);
+        if (idx !== -1) {
+          subSec = subsectionVal.slice(0, idx);
+          subSub = subsectionVal.slice(idx + sep.length);
+        }
+        productCols.forEach((col) => {
+          const searchOk = !q || (col.getAttribute("data-search") || "").includes(q);
+          const sec = col.getAttribute("data-section") || "";
+          const sub = col.getAttribute("data-subsection") || "";
+          const pr = Number(col.getAttribute("data-price") || 0);
+          const sectionOk = !section || sec === section;
+          const subsectionOk = !subsectionVal || (sec === subSec && sub === subSub);
+          const priceOk = priceMatches(pr, priceRange);
+          col.classList.toggle("d-none", !(searchOk && sectionOk && subsectionOk && priceOk));
+        });
+        sectionBanners.forEach((banner) => {
+          const sec = banner.getAttribute("data-portal-section");
+          const visible = productCols.some((c) => !c.classList.contains("d-none") && c.getAttribute("data-section") === sec);
+          banner.classList.toggle("d-none", !visible);
+        });
+        subsectionBanners.forEach((banner) => {
+          const sec = banner.getAttribute("data-portal-section");
+          const sub = banner.getAttribute("data-portal-subsection");
+          const visible = productCols.some(
+            (c) =>
+              !c.classList.contains("d-none") &&
+              c.getAttribute("data-section") === sec &&
+              c.getAttribute("data-subsection") === sub
+          );
+          banner.classList.toggle("d-none", !visible);
+        });
+      }
+
+      let searchDebounce;
+      function scheduleFilter() {
+        clearTimeout(searchDebounce);
+        searchDebounce = setTimeout(applyPortalProductFilters, 140);
+      }
+
+      sectionSel.addEventListener("change", () => {
+        subsectionSel.value = "";
+        refillSubsections();
+        applyPortalProductFilters();
+      });
+      subsectionSel.addEventListener("change", applyPortalProductFilters);
+      if (priceSel) priceSel.addEventListener("change", applyPortalProductFilters);
+      searchEl.addEventListener("input", scheduleFilter);
+      if (resetBtn) {
+        resetBtn.addEventListener("click", () => {
+          searchEl.value = "";
+          sectionSel.value = "";
+          subsectionSel.value = "";
+          if (priceSel) priceSel.value = "";
+          clearTimeout(searchDebounce);
+          refillSubsections();
+          applyPortalProductFilters();
+        });
+      }
+
+      refillSubsections();
+      applyPortalProductFilters();
+    })();
+
+    if (linesJsonEl) renderCart();
+
+    (function catalogLiveSync() {
+      const initial = <%- JSON.stringify(typeof catalogRevision !== "undefined" ? catalogRevision : "") %>;
+      if (!initial) return;
+      const toast = document.getElementById("portalCatalogUpdateToast");
+      const btnRefresh = document.getElementById("portalCatalogUpdateRefresh");
+      const btnDismiss = document.getElementById("portalCatalogUpdateDismiss");
+      let suppressedForRevision = null;
+      async function checkRevision() {
+        try {
+          const r = await fetch("/portal/api/catalog-revision", { credentials: "same-origin", cache: "no-store" });
+          if (!r.ok) return;
+          const j = await r.json();
+          if (!j || !j.revision || j.revision === initial) return;
+          if (j.revision === suppressedForRevision) return;
+          if (toast) {
+            toast.dataset.remoteRevision = j.revision;
+            toast.classList.remove("d-none");
+          }
+        } catch (_) { /* réseau */ }
+      }
+      const intervalMs = 60000;
+      setInterval(() => {
+        if (document.visibilityState === "visible") checkRevision();
+      }, intervalMs);
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") checkRevision();
+      });
+      btnRefresh && btnRefresh.addEventListener("click", () => location.reload());
+      btnDismiss && btnDismiss.addEventListener("click", () => {
+        suppressedForRevision = toast && toast.dataset.remoteRevision ? toast.dataset.remoteRevision : null;
+        toast && toast.classList.add("d-none");
+      });
+    })();
+  </script>
+</body>
+</html>

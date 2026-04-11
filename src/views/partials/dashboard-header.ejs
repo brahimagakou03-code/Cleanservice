@@ -1,0 +1,71 @@
+<%
+  const safeLayout =
+    (typeof layout !== "undefined" && layout)
+    || {};
+  const currentUser =
+    (typeof user !== "undefined" && user)
+    || safeLayout.user
+    || {};
+  const notifications = safeLayout.notifications || {};
+  const recentNotifications = notifications.recent || [];
+  const currentPath = safeLayout.currentPath || "";
+  const brandLogoUrl = safeLayout.brandLogoUrl || "/branding/logo.png";
+%>
+<nav class="navbar navbar-expand-lg cs-navbar mb-4">
+  <div class="container">
+    <a class="navbar-brand d-flex align-items-center gap-3" href="/dashboard">
+      <img src="<%= brandLogoUrl %>" alt="Clean Service" class="cs-logo" />
+    </a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="mainNav">
+      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+        <li class="nav-item"><a class="nav-link cs-link <%= currentPath === '/dashboard' ? 'active' : '' %>" href="/dashboard">Tableau de bord</a></li>
+        <li class="nav-item"><a class="nav-link cs-link <%= currentPath.startsWith('/dashboard/customers') ? 'active' : '' %>" href="/dashboard/customers">Clients</a></li>
+        <li class="nav-item"><a class="nav-link cs-link <%= currentPath.startsWith('/dashboard/catalog') ? 'active' : '' %>" href="/dashboard/catalog">Catalogue</a></li>
+        <li class="nav-item"><a class="nav-link cs-link <%= currentPath.startsWith('/dashboard/orders') ? 'active' : '' %>" href="/dashboard/orders">Commandes</a></li>
+        <li class="nav-item"><a class="nav-link cs-link <%= currentPath.startsWith('/dashboard/invoices') ? 'active' : '' %>" href="/dashboard/invoices">Factures</a></li>
+        <li class="nav-item"><a class="nav-link cs-link <%= currentPath.startsWith('/dashboard/guide') ? 'active' : '' %>" href="/dashboard/guide">Guide</a></li>
+      </ul>
+      <div class="d-flex align-items-center flex-wrap gap-2 ms-lg-auto mt-3 mt-lg-0">
+        <div class="dropdown">
+          <button type="button" class="btn btn-light dropdown-toggle" data-bs-toggle="dropdown" aria-label="Centre de notifications">
+            🔔 <span class="badge text-bg-danger"><%= notifications.unread || 0 %></span>
+          </button>
+          <div class="dropdown-menu dropdown-menu-end p-2" style="min-width:340px;">
+            <% recentNotifications.forEach(function(n){ %>
+              <div class="border-bottom pb-2 mb-2">
+                <div class="fw-semibold"><%= n.title %></div>
+                <div class="small text-muted"><%= n.message %></div>
+                <% if (n.link) { %><a class="btn btn-sm btn-outline-primary mt-1" href="<%= n.link %>">Voir</a><% } %>
+              </div>
+            <% }) %>
+            <a class="btn btn-sm btn-dark w-100" href="/dashboard/notifications">Historique</a>
+          </div>
+        </div>
+        <span class="text-white-50 small"><%= fr.role(currentUser.role || "") %></span>
+        <form method="POST" action="/logout" class="d-inline m-0">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+          <button type="submit" class="btn btn-outline-light btn-sm">Déconnexion</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+(function () {
+  function initDashboardNotifyDropdowns() {
+    if (typeof bootstrap === "undefined" || !bootstrap.Dropdown) return;
+    document.querySelectorAll("[data-bs-toggle='dropdown']").forEach(function (btn) {
+      bootstrap.Dropdown.getOrCreateInstance(btn);
+    });
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initDashboardNotifyDropdowns);
+  } else {
+    initDashboardNotifyDropdowns();
+  }
+})();
+</script>

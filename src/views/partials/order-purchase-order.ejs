@@ -1,0 +1,233 @@
+<% 
+  function poEur(n) {
+    var x = Number(n);
+    if (isNaN(x)) return "—";
+    return x.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, "\u202f") + "\u00a0€";
+  }
+  function poDate(d) {
+    if (!d) return "—";
+    var dt = d instanceof Date ? d : new Date(d);
+    if (isNaN(dt.getTime())) return "—";
+    return dt.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+  }
+  function poDateShort(d) {
+    if (!d) return "—";
+    var dt = d instanceof Date ? d : new Date(d);
+    if (isNaN(dt.getTime())) return "—";
+    return dt.toLocaleDateString("fr-FR");
+  }
+  var billingAddr = billingSite ? (billingSite.label + " — " + billingSite.fullAddress) : "—";
+  var sameBillDel = billingSite && deliverySite && billingSite.id === deliverySite.id;
+  var deliveryAddr = deliverySite
+    ? (sameBillDel ? "Idem adresse de facturation (ci-contre)" : (deliverySite.label + " — " + deliverySite.fullAddress))
+    : (billingSite ? "Idem adresse de facturation (ci-contre)" : "—");
+  var legalRaw = String(organization.legalMentions || "").trim();
+  var legalLines = legalRaw.split(/\n+/).map(function(s){ return s.trim(); }).filter(Boolean);
+  var legalDefault = [
+    "Les prix sont indiqués hors taxes ; la TVA s'ajuste selon les taux en vigueur.",
+    "Les délais et modalités de livraison sont celles convenues avec le vendeur.",
+    "En cas de retard de paiement, pénalités et indemnité forfaitaire selon CGV et textes en vigueur."
+  ];
+  if (legalLines.length === 0) legalLines = legalDefault.slice();
+  else if (legalLines.length === 1) legalLines = [legalLines[0], legalDefault[1], legalDefault[2]];
+  while (legalLines.length < 3) legalLines.push(legalDefault[legalLines.length] || legalDefault[0]);
+  legalLines = legalLines.slice(0, 3);
+  var fillerRows = Math.max(0, Math.min(12, 10 - lineRows.length));
+%>
+<style>
+  #bon-commande.bc-doc { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #000; background: #fff; max-width: 100%; margin: 0 auto; padding: 1.75rem 1.85rem 2rem; box-sizing: border-box; border: 1px solid rgba(0,0,0,.14); border-radius: 3px; box-shadow: 0 2px 14px rgba(0,0,0,.07); }
+  #bon-commande.bc-doc .bc-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 1.5rem; margin-bottom: 1.25rem; }
+  #bon-commande.bc-doc .bc-header-brand { display: flex; align-items: flex-start; gap: 0.85rem; flex: 1; min-width: 0; }
+  #bon-commande.bc-doc .bc-org-logo { max-height: 72px; max-width: 168px; width: auto; height: auto; object-fit: contain; flex-shrink: 0; }
+  #bon-commande.bc-doc .bc-org-name { font-size: 1.15rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; margin: 0 0 0.5rem 0; line-height: 1.2; }
+  #bon-commande.bc-doc .bc-org-meta { font-size: 10px; line-height: 1.45; color: #222; }
+  #bon-commande.bc-doc .bc-org-meta .bc-siret { margin-top: 0.35rem; font-size: 9px; color: #444; }
+  #bon-commande.bc-doc .bc-title-doc { font-size: 1.4rem; font-weight: 700; color: #555; text-transform: uppercase; letter-spacing: 0.04em; text-align: right; line-height: 1.1; margin: 0; }
+  #bon-commande.bc-doc .bc-instruction { font-size: 9px; font-style: italic; color: #333; margin: 0.75rem 0 0.5rem; line-height: 1.35; }
+  #bon-commande.bc-doc .bc-bc-num { font-size: 11px; margin-bottom: 1rem; }
+  #bon-commande.bc-doc .bc-bc-num strong { text-transform: uppercase; }
+  #bon-commande.bc-doc .bc-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+  #bon-commande.bc-doc .bc-col-block { border: 1px solid #000; padding: 0.5rem 0.65rem; min-height: 6.5rem; }
+  #bon-commande.bc-doc .bc-col-block .bc-label { font-weight: 700; margin-bottom: 0.35rem; }
+  #bon-commande.bc-doc .bc-col-block .bc-lines { font-size: 10px; line-height: 1.4; }
+  #bon-commande.bc-doc table.bc-table { width: 100%; border-collapse: collapse; margin-bottom: 0.75rem; table-layout: fixed; }
+  #bon-commande.bc-doc table.bc-table th.bc-th { background: #003399; color: #fff; text-transform: uppercase; font-size: 9px; font-weight: 700; padding: 6px 5px; border: 1px solid #000; text-align: left; vertical-align: middle; }
+  #bon-commande.bc-doc table.bc-table td.bc-td { border: 1px solid #000; padding: 5px 6px; font-size: 10px; vertical-align: top; word-wrap: break-word; }
+  #bon-commande.bc-doc table.bc-table-lines tbody tr:nth-child(even) td { background: #f5f6f9; }
+  #bon-commande.bc-doc table.bc-table-lines th.bc-th, #bon-commande.bc-doc table.bc-table-lines td.bc-td { text-align: left; }
+  #bon-commande.bc-doc table.bc-table-lines .bc-num { text-align: right; }
+  #bon-commande.bc-doc table.bc-table-lines col.bc-c-qty { width: 9%; }
+  #bon-commande.bc-doc table.bc-table-lines col.bc-c-unit { width: 10%; }
+  #bon-commande.bc-doc table.bc-table-lines col.bc-c-desc { width: auto; }
+  #bon-commande.bc-doc table.bc-table-lines col.bc-c-pu { width: 16%; }
+  #bon-commande.bc-doc table.bc-table-lines col.bc-c-tot { width: 16%; }
+  #bon-commande.bc-doc .bc-lines-wrap { margin-bottom: 0.5rem; }
+  #bon-commande.bc-doc .bc-totals { display: flex; justify-content: flex-end; margin-top: 0.25rem; margin-bottom: 1.25rem; }
+  #bon-commande.bc-doc .bc-totals-inner { width: 280px; max-width: 100%; }
+  #bon-commande.bc-doc .bc-total-row { display: flex; border: 1px solid #000; border-bottom: none; font-size: 10px; }
+  #bon-commande.bc-doc .bc-total-row:last-child { border-bottom: 1px solid #000; font-weight: 700; }
+  #bon-commande.bc-doc .bc-total-row .bc-total-label { flex: 1; padding: 5px 8px; text-align: right; text-transform: uppercase; border-right: 1px solid #000; background: #fafafa; }
+  #bon-commande.bc-doc .bc-total-row .bc-total-val { width: 100px; padding: 5px 8px; text-align: right; font-variant-numeric: tabular-nums; }
+  #bon-commande.bc-doc .bc-footer { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; align-items: start; margin-top: 0.5rem; }
+  #bon-commande.bc-doc .bc-legal { font-size: 9px; line-height: 1.45; padding-right: 0.5rem; }
+  #bon-commande.bc-doc .bc-legal ol { margin: 0; padding-left: 1.1rem; }
+  #bon-commande.bc-doc .bc-legal li { margin-bottom: 0.35rem; }
+  #bon-commande.bc-doc .bc-sign { font-size: 10px; }
+  #bon-commande.bc-doc .bc-sign .bc-sign-line { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
+  #bon-commande.bc-doc .bc-sign .bc-blank { border-bottom: 1px solid #000; min-width: 140px; flex: 1; min-height: 1.1rem; }
+  #bon-commande.bc-doc .bc-sign .bc-sig-row { border-bottom: 1px solid #000; min-height: 2.5rem; margin-bottom: 0.25rem; }
+  #bon-commande.bc-doc .bc-sign .bc-sig-labels { display: flex; justify-content: space-between; font-size: 9px; color: #333; }
+  @media (max-width: 767px) {
+    #bon-commande.bc-doc .bc-header { flex-direction: column; }
+    #bon-commande.bc-doc .bc-title-doc { text-align: left; }
+    #bon-commande.bc-doc .bc-two-col, #bon-commande.bc-doc .bc-footer { grid-template-columns: 1fr; }
+  }
+</style>
+<div class="bc-doc order-bc-print" id="bon-commande">
+  <header class="bc-header">
+    <div class="bc-header-brand">
+      <img class="bc-org-logo" src="<%= organization.logo || '/branding/logo.png' %>" alt="" />
+      <div>
+        <p class="bc-org-name"><%= organization.name %></p>
+        <div class="bc-org-meta">
+          <%= organization.address %><br>
+          Tél.&nbsp;: <%= organization.phone %> — E-mail&nbsp;: <%= organization.email %>
+          <div class="bc-siret">SIRET <%= organization.siret %><% if (organization.vatNumber) { %> — TVA <%= organization.vatNumber %><% } %></div>
+        </div>
+      </div>
+    </div>
+    <p class="bc-title-doc">Bon de commande</p>
+  </header>
+
+  <p class="bc-instruction">Les références ci-dessous doivent figurer sur toutes les correspondances, bons de livraison et factures relatives à la commande.</p>
+  <p class="bc-bc-num"><strong>B.C. N°</strong> : <span class="font-monospace"><%= order.number %></span></p>
+
+  <div class="bc-two-col">
+    <div class="bc-col-block">
+      <div class="bc-label">À :</div>
+      <div class="bc-lines">
+        <strong><%= order.customer.companyName %></strong><br>
+        N° client : <%= order.customer.code %><br>
+        <% if (order.customer.siret) { %>SIRET <%= order.customer.siret %><br><% } %>
+        <% if (order.customer.vatNumber) { %>TVA intracom.&nbsp;: <%= order.customer.vatNumber %><br><% } %>
+        <%= billingAddr %><br>
+        <% if (order.customer.phone) { %>Tél.&nbsp;: <%= order.customer.phone %><br><% } %>
+        <% if (order.customer.email) { %>E-mail&nbsp;: <%= order.customer.email %><br><% } %>
+        <% if (billingSite && billingSite.contactName) { %>Contact site&nbsp;: <%= billingSite.contactName %><% if (billingSite.contactPhone) { %> — <%= billingSite.contactPhone %><% } %><% if (billingSite.contactEmail) { %> — <%= billingSite.contactEmail %><% } %><br><% } %>
+      </div>
+    </div>
+    <div class="bc-col-block">
+      <div class="bc-label">Adresse de livraison :</div>
+      <div class="bc-lines">
+        <%= deliveryAddr %>
+        <% if (deliverySite && !sameBillDel && (deliverySite.contactName || deliverySite.contactPhone || deliverySite.contactEmail)) { %>
+          <br><span style="font-size:9px;">Contact&nbsp;: <% if (deliverySite.contactName) { %><%= deliverySite.contactName %><% } %><% if (deliverySite.contactPhone) { %> — <%= deliverySite.contactPhone %><% } %><% if (deliverySite.contactEmail) { %> — <%= deliverySite.contactEmail %><% } %></span>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <table class="bc-table" role="presentation">
+    <thead>
+      <tr>
+        <th class="bc-th">Date B.C.</th>
+        <th class="bc-th">Receveur</th>
+        <th class="bc-th">Transit</th>
+        <th class="bc-th">Point F.O.B.</th>
+        <th class="bc-th">Modalités</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="bc-td"><%= poDateShort(order.createdAt) %></td>
+        <td class="bc-td"><%= order.customer.companyName %></td>
+        <td class="bc-td">—</td>
+        <td class="bc-td">Départ entrepôt</td>
+        <td class="bc-td"><%= fr.paymentTerms(order.customer.paymentTerms) %></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="bc-lines-wrap">
+    <table class="bc-table bc-table-lines" role="presentation">
+      <colgroup>
+        <col class="bc-c-qty" /><col class="bc-c-unit" /><col class="bc-c-desc" /><col class="bc-c-pu" /><col class="bc-c-tot" />
+      </colgroup>
+      <thead>
+        <tr>
+          <th class="bc-th bc-num">Qté</th>
+          <th class="bc-th">Unité</th>
+          <th class="bc-th">Description</th>
+          <th class="bc-th bc-num">Prix unitaire</th>
+          <th class="bc-th bc-num">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% lineRows.forEach(function(l) { %>
+          <tr>
+            <td class="bc-td bc-num"><%= l.quantity %></td>
+            <td class="bc-td">pce</td>
+            <td class="bc-td">
+              <%= l.productNameSnapshot %>
+              <% if (l.productSkuSnapshot) { %><span style="font-size:9px;color:#555;"><br>Réf. <%= l.productSkuSnapshot %></span><% } %>
+              <% if (Number(l.discountPercent) > 0) { %><br><span style="font-size:9px;">Remise <%= Number(l.discountPercent) %>%</span><% } %>
+            </td>
+            <td class="bc-td bc-num"><%= poEur(l.unitPriceHt) %></td>
+            <td class="bc-td bc-num"><%= poEur(l.lineHt) %></td>
+          </tr>
+        <% }); %>
+        <% for (var i = 0; i < fillerRows; i++) { %>
+          <tr>
+            <td class="bc-td bc-num">&nbsp;</td>
+            <td class="bc-td">&nbsp;</td>
+            <td class="bc-td">&nbsp;</td>
+            <td class="bc-td bc-num">&nbsp;</td>
+            <td class="bc-td bc-num">&nbsp;</td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="bc-totals">
+    <div class="bc-totals-inner">
+      <div class="bc-total-row">
+        <span class="bc-total-label">Sous-total</span>
+        <span class="bc-total-val"><%= poEur(order.totalHt) %></span>
+      </div>
+      <div class="bc-total-row">
+        <span class="bc-total-label">Taxe (TVA)</span>
+        <span class="bc-total-val"><%= poEur(order.totalTva) %></span>
+      </div>
+      <div class="bc-total-row">
+        <span class="bc-total-label">Transp. &amp; manutention</span>
+        <span class="bc-total-val"><%= poEur(0) %></span>
+      </div>
+      <div class="bc-total-row">
+        <span class="bc-total-label">Total</span>
+        <span class="bc-total-val"><%= poEur(order.totalTtc) %></span>
+      </div>
+    </div>
+  </div>
+
+  <footer class="bc-footer">
+    <div class="bc-legal">
+      <ol>
+        <% legalLines.forEach(function(line) { %><li><%= line %></li><% }); %>
+      </ol>
+      <p class="mb-0 mt-2" style="font-size:8px;">Livraison souhaitée : <%= order.requestedDeliveryDate ? poDate(order.requestedDeliveryDate) : "À convenir" %> — Statut : <%= fr.orderStatus(order.status) %></p>
+    </div>
+    <div class="bc-sign">
+      <div class="bc-sign-line">
+        <span>Autorisé par :</span><span class="bc-blank"></span>
+        <span>Titre :</span><span class="bc-blank"></span>
+      </div>
+      <div class="bc-sig-row"></div>
+      <div class="bc-sig-labels">
+        <span>Signature</span>
+        <span>Date</span>
+      </div>
+      <p class="small text-muted mt-2 mb-0" style="font-size:8px;">Bon pour accord.</p>
+    </div>
+  </footer>
+</div>

@@ -1,0 +1,15 @@
+<% const headerMode = typeof mode !== "undefined" ? mode : "chooser"; %>
+<nav class="navbar navbar-expand-lg cs-navbar mb-4">
+  <div class="container">
+    <a class="navbar-brand d-flex align-items-center gap-3" href="/">
+      <img src="/branding/logo.png" alt="Clean Service" class="cs-logo" />
+    </a>
+    <div class="navbar-nav ms-auto flex-row gap-2 align-items-center">
+      <% if (headerMode === "staff") { %>
+        <a class="nav-link cs-link py-1" href="/portal/login">Espace client</a>
+      <% } else if (headerMode === "portal") { %>
+        <a class="nav-link cs-link py-1" href="/login">Administration</a>
+      <% } %>
+    </div>
+  </div>
+</nav>

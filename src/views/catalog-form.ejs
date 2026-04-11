@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title><%= product ? "Fiche produit" : "Nouveau produit" %></title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="/public/styles/app.css" rel="stylesheet">
+  <style>
+    #catalogProductActiveSwitch.form-check-input {
+      width: 3.25rem;
+      height: 1.65rem;
+      cursor: pointer;
+    }
+    #catalogProductActiveSwitch.form-check-input:focus {
+      box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.35);
+    }
+    .catalog-img-drop {
+      display: block;
+      border: 2px dashed rgba(15, 63, 113, 0.28);
+      border-radius: 12px;
+      padding: 1.35rem 1rem;
+      text-align: center;
+      cursor: pointer;
+      background: #fff;
+      transition: border-color 0.15s ease, background 0.15s ease;
+      margin-bottom: 0;
+    }
+    .catalog-img-drop:hover,
+    .catalog-img-drop.is-dragover {
+      border-color: var(--cs-primary, #0f3f71);
+      background: rgba(15, 63, 113, 0.05);
+    }
+    .catalog-img-drop strong {
+      display: block;
+      font-size: 0.95rem;
+      color: var(--cs-text, #16324f);
+    }
+    .catalog-img-drop span.muted {
+      font-size: 0.8rem;
+      color: #6e8196;
+    }
+  </style>
+</head>
+<body class="bg-light">
+<%- include("partials/dashboard-header") %>
+<div class="container py-4">
+  <h1 class="h3"><%= product ? "Produit " + product.sku : "Nouveau produit" %></h1>
+  <p class="small text-muted mb-2"><span class="text-danger" aria-hidden="true">*</span> Champ obligatoire</p>
+  <% if (errors && errors.length) { %><div class="alert alert-danger"><% errors.forEach(function(e){ %><div><%= e %></div><% }) %></div><% } %>
+  <form class="card p-3 mb-3" method="POST" enctype="multipart/form-data" action="<%= product ? '/dashboard/catalog/' + product.id : '/dashboard/catalog' %>">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+    <div class="row g-2">
+      <div class="col-12">
+        <div class="rounded-3 border border-2 border-primary p-3 p-md-4 bg-primary-subtle shadow-sm">
+          <div class="d-flex flex-wrap align-items-center gap-3 gap-md-4">
+            <div class="form-check form-switch m-0 d-flex align-items-center">
+              <input class="form-check-input" type="checkbox" role="switch" id="catalogProductActiveSwitch" name="isActive" <%= product ? (product.isActive?'checked':'') : 'checked' %>>
+            </div>
+            <div class="flex-grow-1" style="min-width: 12rem;">
+              <label class="form-check-label fw-bold fs-5 text-dark mb-1 d-block" for="catalogProductActiveSwitch" style="cursor: pointer;">Produit actif</label>
+              <p class="small text-body-secondary mb-0"><strong class="text-primary">Activé</strong> : le produit peut être commandé sur l’espace client (sauf si « rupture » ci‑dessous est cochée). <strong class="text-danger">Désactivé</strong> : masqué côté client, sauf si vous cochez <strong>Rupture de stock sur l’espace client</strong> pour afficher la fiche sans commande.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12">
+        <div class="rounded-3 border border-2 border-warning p-3 p-md-4 bg-warning-subtle shadow-sm">
+          <div class="form-check m-0">
+            <input class="form-check-input" type="checkbox" id="portalRuptureStockCb" name="portalRuptureStock" <%= product && product.portalRuptureStock ? "checked" : "" %>>
+            <label class="form-check-label fw-semibold text-dark" for="portalRuptureStockCb" style="cursor: pointer;">Rupture de stock sur l’espace client</label>
+          </div>
+          <p class="small text-body-secondary mb-0 mt-2 ms-4 ps-1">Le produit reste visible dans le catalogue client avec la mention <strong>« Rupture de stock »</strong> ; le bouton d’ajout au panier est désactivé. Utile pour un article inactif que vous voulez quand même montrer, ou une rupture temporaire sur un produit actif.</p>
+        </div>
+      </div>
+      <div class="col-md-3"><label class="form-label">Référence (SKU)</label><input class="form-control" name="sku" value="<%= product?.sku || '' %>" placeholder="Généré si vide"></div>
+      <div class="col-md-5"><label class="form-label">Nom <span class="text-danger" aria-hidden="true">*</span></label><input class="form-control" name="name" value="<%= product?.name || '' %>" required></div>
+      <div class="col-md-4"><label class="form-label">Catégorie</label>
+        <select class="form-select" name="categoryId"><option value="">-</option><% categories.forEach(function(c){ %><option value="<%= c.id %>" <%= product?.categoryId===c.id?'selected':'' %>><%= "-".repeat(c.depth) %> <%= c.name %></option><% }) %></select>
+      </div>
+      <div class="col-md-12"><label class="form-label">Description riche</label><textarea class="form-control" rows="4" name="description"><%= product?.description || '' %></textarea></div>
+      <div class="col-md-6">
+        <label class="form-label">Fiche fournisseur (optionnel)</label>
+        <input class="form-control mb-2" type="text" name="supplierUrl" value="<%= product?.supplierUrl || '' %>" placeholder="Lien https://…" autocomplete="off">
+        <label class="form-label small text-muted mb-1">ou fichier PDF</label>
+        <input class="form-control form-control-sm" type="file" name="supplierSheetPdf" accept="application/pdf,.pdf">
+        <p class="small text-muted mb-0 mt-1">Portail client. Lien ou PDF (max. 12&nbsp;Mo) — si les deux sont remplis, le PDF est utilisé.</p>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Fiche technique (optionnel)</label>
+        <input class="form-control mb-2" type="text" name="technicalSheetUrl" value="<%= product?.technicalSheetUrl || '' %>" placeholder="Lien https://…" autocomplete="off">
+        <label class="form-label small text-muted mb-1">ou fichier PDF</label>
+        <input class="form-control form-control-sm" type="file" name="technicalSheetPdf" accept="application/pdf,.pdf">
+        <p class="small text-muted mb-0 mt-1">Portail client. Lien ou PDF (max. 12&nbsp;Mo) — si les deux sont remplis, le PDF est utilisé.</p>
+      </div>
+      <div class="col-md-2"><label class="form-label">Unité</label><select class="form-select" name="unit"><% units.forEach(function(u){ %><option value="<%= u %>" <%= product?.unit===u?'selected':'' %>><%= u %></option><% }) %></select></div>
+      <div class="col-md-2"><label class="form-label">Prix HT</label><input class="form-control" id="basePriceHt" type="number" step="0.01" name="basePriceHt" value="<%= product ? formatEuroHtInput(product.basePriceHt) : '0.00' %>"></div>
+      <div class="col-md-2"><label class="form-label">TVA %</label><select class="form-select" id="vatRate" name="vatRate"><% vatRates.forEach(function(v){ %><option value="<%= v %>" <%= String(product?.vatRate||'20')===String(v)?'selected':'' %>><%= v %></option><% }) %></select></div>
+      <div class="col-md-2"><label class="form-label">Prix TTC</label><input class="form-control" id="priceTtc" readonly></div>
+      <div class="col-md-2"><label class="form-label">Quantité minimale</label><input class="form-control" type="number" name="minOrderQty" value="<%= product?.minOrderQty || 1 %>"></div>
+      <div class="col-md-2"><label class="form-label">Stock</label><input class="form-control" type="number" name="stockQty" value="<%= product?.stockQty ?? '' %>" placeholder="vide = pas de gestion du stock"></div>
+      <div class="col-md-2"><label class="form-label">Poids kg</label><input class="form-control" type="number" step="0.01" name="weightKg" value="<%= product != null && product.weightKg != null && product.weightKg !== '' ? formatEuroHtInput(product.weightKg) : '' %>"></div>
+      <div class="col-md-4"><label class="form-label">Dimensions</label><input class="form-control" name="dimensions" value="<%= product?.dimensions || '' %>" placeholder="LxWxH"></div>
+      <div class="col-md-12">
+        <span class="form-label d-block mb-1">Images produit</span>
+        <p class="small text-muted mb-2">Jusqu’à <strong>5</strong> images — un clic pour parcourir, ou déposez-les dans la zone.</p>
+        <input id="images" class="d-none" type="file" name="images" multiple accept="image/*">
+        <label id="dropzone" class="catalog-img-drop" for="images">
+          <strong>Choisir ou déposer des images</strong>
+          <span class="muted d-block mt-1">PNG, JPG, WebP…</span>
+        </label>
+        <div class="d-flex align-items-center gap-2 flex-wrap mt-2">
+          <button type="button" class="btn btn-sm btn-outline-secondary" id="clearImages" hidden>Vider la sélection</button>
+        </div>
+        <div id="preview" class="d-flex gap-2 mt-2 flex-wrap"></div>
+        <% if (product && product.imageUrls) { %>
+          <p class="small text-muted mt-3 mb-1">Images actuelles</p>
+          <div class="d-flex gap-2 flex-wrap"><% product.imageUrls.split("|").filter(Boolean).forEach(function(url){ %><img src="<%= url %>" alt="" class="rounded" style="height:80px;object-fit:cover"><% }) %></div>
+        <% } %>
+      </div>
+    </div>
+    <button class="btn btn-primary mt-3"><%= product ? "Enregistrer" : "Créer" %></button>
+  </form>
+
+  <% if (product) { %>
+    <div class="card p-3">
+      <h2 class="h5">Clients avec prix spécifiques</h2>
+      <table class="table table-sm">
+        <thead><tr><th>Client</th><th>Prix custom</th><th>Remise</th></tr></thead>
+        <tbody>
+          <% product.customerPrices.forEach(function(cp){ %>
+            <tr><td><%= cp.customer.companyName %></td><td><%= cp.customPrice %></td><td><%= cp.discountPercent %>%</td></tr>
+          <% }) %>
+          <% if (!product.customerPrices.length) { %><tr><td colspan="3">Aucun prix spécifique</td></tr><% } %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+
+  <p class="mt-3"><a class="btn btn-outline-secondary" href="/dashboard/catalog">Retour</a></p>
+</div>
+<script>
+  const input = document.getElementById("images");
+  const zone = document.getElementById("dropzone");
+  const preview = document.getElementById("preview");
+  const clearBtn = document.getElementById("clearImages");
+  const MAX_IMAGES = 5;
+  function setFiles(fileList) {
+    const picked = [...fileList].filter((f) => f.type.startsWith("image/")).slice(0, MAX_IMAGES);
+    const dt = new DataTransfer();
+    picked.forEach((f) => dt.items.add(f));
+    input.files = dt.files;
+    renderPreview(input.files);
+  }
+  function renderPreview(files) {
+    preview.querySelectorAll("img").forEach((img) => {
+      if (img.src.startsWith("blob:")) URL.revokeObjectURL(img.src);
+    });
+    preview.innerHTML = "";
+    const n = files && files.length;
+    if (clearBtn) clearBtn.hidden = !n;
+    if (!n) return;
+    [...files].forEach((f) => {
+      const img = document.createElement("img");
+      img.style.height = "80px";
+      img.style.borderRadius = "6px";
+      img.style.objectFit = "cover";
+      img.src = URL.createObjectURL(f);
+      preview.appendChild(img);
+    });
+  }
+  if (zone && input) {
+    zone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      zone.classList.add("is-dragover");
+    });
+    zone.addEventListener("dragleave", () => zone.classList.remove("is-dragover"));
+    zone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      zone.classList.remove("is-dragover");
+      if (e.dataTransfer.files && e.dataTransfer.files.length) setFiles(e.dataTransfer.files);
+    });
+    input.addEventListener("change", () => {
+      if (input.files && input.files.length) setFiles(input.files);
+    });
+  }
+  clearBtn &&
+    clearBtn.addEventListener("click", () => {
+      input.value = "";
+      renderPreview(input.files);
+    });
+  function computeTtc() {
+    const ht = Number(document.getElementById("basePriceHt").value || 0);
+    const vat = Number(document.getElementById("vatRate").value || 0);
+    document.getElementById("priceTtc").value = (ht * (1 + vat / 100)).toFixed(2);
+  }
+  document.getElementById("basePriceHt")?.addEventListener("input", computeTtc);
+  document.getElementById("vatRate")?.addEventListener("change", computeTtc);
+  computeTtc();
+</script>
+</body>
+</html>

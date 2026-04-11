@@ -1,0 +1,430 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  siret     String   @unique
+  address   String
+  phone     String
+  email     String
+  vatNumber String?
+  logo      String?
+  approvalThresholdTtc Decimal @default(1000)
+  legalMentions String? @default("Penalites de retard: taux legal en vigueur. Indemnite forfaitaire de recouvrement: 40 EUR.")
+  reminderDelayDays Int @default(7)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users     User[]
+  clients   Client[]
+  customers Customer[]
+  customerSites CustomerSite[]
+  customerPriceLists CustomerPriceList[]
+  productCategories ProductCategory[]
+  products  Product[]
+  orders    Order[]
+  orderLines OrderLine[]
+  orderStatusHistory OrderStatusHistory[]
+  invoices  Invoice[]
+  invoiceLines InvoiceLine[]
+  payments Payment[]
+  invoiceSequences InvoiceSequence[]
+  notifications Notification[]
+  portalNotifications PortalNotification[]
+  emailQueue EmailQueue[]
+  orderLineStockReservations OrderLineStockReservation[]
+}
+
+model User {
+  id              String   @id @default(cuid())
+  email           String   @unique
+  passwordHash    String
+  firstName       String
+  lastName        String
+  role            String   @default("MEMBER")
+  isActive        Boolean  @default(true)
+  lastLoginAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  organizationId  String
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdOrders   Order[]      @relation("CreatedBy")
+  approvedOrders  Order[]      @relation("ApprovedBy")
+  changedOrderStatuses OrderStatusHistory[]
+  notifications Notification[]
+}
+
+model Client {
+  id             String   @id @default(cuid())
+  name           String
+  email          String?
+  organizationId String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model Product {
+  id             String   @id @default(cuid())
+  categoryId     String?
+  name           String
+  sku            String
+  description    String?
+  unit           String   @default("piece")
+  basePriceHt    Decimal  @default(0)
+  vatRate        String   @default("20")
+  isActive       Boolean  @default(true)
+  /// Portail client : affiché en rupture de stock (non commandable). Peut être activé même si isActive=false pour garder la fiche visible.
+  portalRuptureStock Boolean @default(false)
+  minOrderQty    Int      @default(1)
+  stockQty       Int?
+  weightKg       Decimal?
+  dimensions     String?
+  imageUrls      String?
+  supplierUrl    String?
+  /// Lien vers la fiche technique (PDF ou page) — visible sur le portail client.
+  technicalSheetUrl String?
+  organizationId String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  category       ProductCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, sku])
+  customerPrices CustomerPriceList[]
+  orderLines     OrderLine[]
+  stockReservations OrderLineStockReservation[]
+}
+
+model Order {
+  id             String   @id @default(cuid())
+  number         String
+  organizationId String
+  customerId     String
+  deliverySiteId String?
+  billingSiteId  String?
+  status         String   @default("DRAFT")
+  totalHt        Decimal  @default(0)
+  totalTva       Decimal  @default(0)
+  totalTtc       Decimal  @default(0)
+  notes          String?
+  internalNotes  String?
+  createdById    String
+  approvedById   String?
+  approvedAt     DateTime?
+  requestedDeliveryDate DateTime?
+  isInvoiced     Boolean  @default(false)
+  cancellationReason String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer       Customer     @relation("OrderCustomer", fields: [customerId], references: [id], onDelete: Cascade)
+  deliverySite   CustomerSite? @relation("DeliverySite", fields: [deliverySiteId], references: [id], onDelete: SetNull)
+  billingSite    CustomerSite? @relation("BillingSite", fields: [billingSiteId], references: [id], onDelete: SetNull)
+  createdBy      User         @relation("CreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  approvedBy     User?        @relation("ApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  lines          OrderLine[]
+  statusHistory  OrderStatusHistory[]
+  invoices       Invoice[]
+  portalNotifications PortalNotification[]
+  stockReservations OrderLineStockReservation[]
+
+  @@unique([organizationId, number])
+}
+
+model Customer {
+  id                String   @id @default(cuid())
+  organizationId    String
+  code              String
+  companyName       String
+  countryCode       String   @default("FR")
+  siret             String?
+  vatNumber         String?
+  email             String?
+  phone             String?
+  website           String?
+  notes             String?
+  paymentTerms      String   @default("NET_30")
+  isActive          Boolean  @default(true)
+  portalPasswordHash String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  organization      Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sites             CustomerSite[]
+  priceLists        CustomerPriceList[]
+  orders            Order[] @relation("OrderCustomer")
+  invoices          Invoice[]
+  portalNotifications PortalNotification[]
+
+  @@unique([organizationId, code])
+}
+
+model CustomerSite {
+  id                String   @id @default(cuid())
+  organizationId    String
+  customerId        String
+  label             String
+  fullAddress       String
+  isDefault         Boolean  @default(false)
+  isShipping        Boolean  @default(true)
+  isBilling         Boolean  @default(false)
+  contactName       String?
+  contactEmail      String?
+  contactPhone      String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer          Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  deliveryOrders    Order[] @relation("DeliverySite")
+  billingOrders     Order[] @relation("BillingSite")
+}
+
+model CustomerPriceList {
+  id                String   @id @default(cuid())
+  organizationId    String
+  customerId        String
+  productId         String
+  customPrice       Decimal
+  discountPercent   Decimal  @default(0)
+  minQuantity       Int      @default(1)
+  validFrom         DateTime?
+  validTo           DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer          Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  product           Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, customerId, productId, minQuantity])
+}
+
+model ProductCategory {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  slug           String
+  description    String?
+  parentId       String?
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parent         ProductCategory? @relation("ProductCategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children       ProductCategory[] @relation("ProductCategoryTree")
+  products       Product[]
+
+  @@unique([organizationId, slug])
+}
+
+model OrderLine {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  orderId            String
+  productId          String?
+  productNameSnapshot String
+  productSkuSnapshot  String
+  quantity           Decimal
+  unitPriceHt        Decimal
+  discountPercent    Decimal @default(0)
+  vatRate            Decimal
+  lineTotalHt        Decimal
+  lineTotalTtc       Decimal
+  sortOrder          Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  order              Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product            Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+  stockReservation   OrderLineStockReservation?
+}
+
+/// Réservation de stock à la confirmation ; levée à l’expédition après décrément du stock physique.
+model OrderLineStockReservation {
+  id             String   @id @default(cuid())
+  organizationId String
+  orderId        String
+  orderLineId    String   @unique
+  productId      String
+  quantity       Int
+  createdAt      DateTime @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  order          Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderLine      OrderLine    @relation(fields: [orderLineId], references: [id], onDelete: Cascade)
+  product        Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, productId])
+  @@index([orderId])
+}
+
+model OrderStatusHistory {
+  id             String   @id @default(cuid())
+  organizationId String
+  orderId        String
+  fromStatus     String?
+  toStatus       String
+  changedById    String
+  comment        String?
+  createdAt      DateTime @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  order          Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  changedBy      User         @relation(fields: [changedById], references: [id], onDelete: Cascade)
+}
+
+model Invoice {
+  id               String   @id @default(cuid())
+  organizationId   String
+  number           String?
+  orderId          String?
+  customerId       String
+  type             String   @default("INVOICE")
+  status           String   @default("DRAFT")
+  issuedAt         DateTime?
+  dueAt            DateTime?
+  totalHt          Decimal  @default(0)
+  totalTva         Decimal  @default(0)
+  totalTtc         Decimal  @default(0)
+  amountPaid       Decimal  @default(0)
+  amountDue        Decimal  @default(0)
+  notes            String?
+  legalMentions    String?
+  pdfUrl           String?
+  sentAt           DateTime?
+  paidAt           DateTime?
+  originalInvoiceId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  order            Order?       @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  customer         Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  lines            InvoiceLine[]
+  payments         Payment[]
+  originalInvoice  Invoice?     @relation("CreditNoteLink", fields: [originalInvoiceId], references: [id], onDelete: SetNull)
+  creditNotes      Invoice[]    @relation("CreditNoteLink")
+
+  @@unique([organizationId, number])
+}
+
+model InvoiceLine {
+  id               String   @id @default(cuid())
+  organizationId   String
+  invoiceId        String
+  description      String
+  quantity         Decimal
+  unitPriceHt      Decimal
+  vatRate          Decimal
+  discountPercent  Decimal @default(0)
+  lineTotalHt      Decimal
+  lineTotalTtc     Decimal
+  sortOrder        Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoice          Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id               String   @id @default(cuid())
+  organizationId   String
+  invoiceId        String
+  amount           Decimal
+  paidAt           DateTime
+  method           String
+  reference        String?
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoice          Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+model InvoiceSequence {
+  id               String   @id @default(cuid())
+  organizationId   String
+  year             Int
+  type             String
+  lastValue        Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, year, type])
+}
+
+model Notification {
+  id             String   @id @default(cuid())
+  userId         String
+  organizationId String
+  type           String
+  title          String
+  message        String
+  link           String?
+  isRead         Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+// Alertes espace client (validation / refus commande)
+model PortalNotification {
+  id             String   @id @default(cuid())
+  organizationId String
+  customerId     String
+  orderId        String?
+  type           String
+  title          String
+  message        String
+  isRead         Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  order        Order?       @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([customerId, isRead])
+}
+
+model EmailQueue {
+  id             String   @id @default(cuid())
+  organizationId String
+  toEmail        String
+  subject        String
+  html           String
+  status         String   @default("PENDING")
+  attempts       Int      @default(0)
+  error          String?
+  sentAt         DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+

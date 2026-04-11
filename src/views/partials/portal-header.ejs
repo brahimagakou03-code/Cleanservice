@@ -1,0 +1,85 @@
+<% const pp = (typeof locals.portalPath === "string" ? locals.portalPath : "").replace(/\/$/, "") || "/"; %>
+<% const pUnread = typeof portalUnreadCount !== "undefined" ? Number(portalUnreadCount) || 0 : 0; %>
+<% const pAlerts = typeof portalAlerts !== "undefined" && Array.isArray(portalAlerts) ? portalAlerts : []; %>
+<% const pDropdown = pAlerts.slice(0, 8); %>
+<nav class="navbar navbar-expand-lg navbar-dark cs-navbar cs-navbar-portal mb-4">
+  <div class="container">
+    <a class="navbar-brand d-flex align-items-center gap-3" href="/portal">
+      <img src="/branding/logo.png" alt="Clean Service" class="cs-logo cs-logo-portal" />
+    </a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#portalMainNav" aria-controls="portalMainNav" aria-expanded="false" aria-label="Ouvrir le menu">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="portalMainNav">
+      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+        <li class="nav-item">
+          <a class="nav-link cs-link <%= pp === '/portal' ? 'active' : '' %>" href="/portal">Accueil</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link cs-link <%= pp.startsWith('/portal/commandes') ? 'active' : '' %>" href="/portal/commandes">Mes commandes</a>
+        </li>
+      </ul>
+      <div class="d-flex align-items-center flex-wrap gap-2 ms-lg-auto mt-3 mt-lg-0">
+        <div class="dropdown cs-portal-notify-dropdown">
+          <button type="button" class="btn btn-light dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" aria-label="Centre de notifications">
+            🔔 <span class="badge text-bg-danger"><%= pUnread > 99 ? "99+" : pUnread %></span>
+          </button>
+          <div class="dropdown-menu dropdown-menu-end p-2 cs-portal-notify-menu shadow" style="min-width:340px;">
+            <% if (!pDropdown.length) { %>
+              <p class="small text-muted mb-0 px-1 py-2">Aucune notification récente.</p>
+            <% } else { %>
+              <% pDropdown.forEach(function(n){ %>
+                <div class="border-bottom pb-2 mb-2">
+                  <div class="fw-semibold"><%= n.title %></div>
+                  <div class="small text-muted"><%= String(n.message || "").length > 120 ? String(n.message).slice(0, 117) + "…" : n.message %></div>
+                  <div class="d-flex flex-wrap gap-1 mt-2 align-items-center">
+                    <% if (n.orderId) { %>
+                      <a class="btn btn-sm btn-outline-primary mt-1" href="/portal/commandes/<%= n.orderId %>">Voir</a>
+                    <% } %>
+                    <% if (!n.isRead) { %>
+                      <form method="POST" action="/portal/notifications/<%= n.id %>/read" class="d-inline m-0">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                        <button type="submit" class="btn btn-sm btn-outline-secondary mt-1">Marquer lu</button>
+                      </form>
+                    <% } %>
+                  </div>
+                </div>
+              <% }) %>
+            <% } %>
+            <a class="btn btn-sm btn-dark w-100" href="/portal/notifications">Historique</a>
+          </div>
+        </div>
+        <span class="text-white-50 small">Espace client</span>
+        <form method="POST" action="/portal/logout" class="d-inline m-0">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+          <button type="submit" class="btn btn-outline-light btn-sm">Déconnexion</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+(function () {
+  function initPortalNotifyDropdowns() {
+    if (typeof bootstrap === "undefined" || !bootstrap.Dropdown) return;
+    document.querySelectorAll(".cs-portal-notify-dropdown > [data-bs-toggle='dropdown']").forEach(function (btn) {
+      var existing = bootstrap.Dropdown.getInstance(btn);
+      if (existing) existing.dispose();
+      new bootstrap.Dropdown(btn, {
+        popperConfig: function (defaultBsPopperConfig) {
+          return Object.assign({}, defaultBsPopperConfig, { strategy: "fixed" });
+        },
+      });
+    });
+  }
+  function run() {
+    requestAnimationFrame(initPortalNotifyDropdowns);
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", run);
+  } else {
+    run();
+  }
+})();
+</script>

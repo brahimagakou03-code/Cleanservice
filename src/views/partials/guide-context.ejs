@@ -1,0 +1,114 @@
+<%#
+  Paramètres attendus :
+  - pathUrl : chemin à ouvrir dans l’app (ex. /dashboard)
+  - panelTitle : libellé court optionnel (ex. « Vue liste », « Fiche détail »)
+  - bullets : tableau de chaînes (repères concrets, lus de haut en bas)
+  - tip : phrase d’astuce optionnelle (bas de carte)
+  - mockVariant : nav_dashboard | clients | catalog | orders | order_detail | invoices | invoice_detail | notifications | team | guide_page
+%>
+<div class="card border-0 mb-3 shadow-sm cs-guide-context">
+  <div class="card-header py-2 px-3 d-flex flex-wrap justify-content-between align-items-center gap-2 bg-primary bg-opacity-10 border-0">
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <span class="fw-semibold text-primary">Repères dans l’application</span>
+      <% if (typeof panelTitle !== "undefined" && panelTitle) { %>
+      <span class="badge rounded-pill cs-guide-context-badge"><%= panelTitle %></span>
+      <% } %>
+    </div>
+    <a class="btn btn-sm btn-primary" href="<%= pathUrl %>" target="_blank" rel="noopener" title="S’ouvre dans un nouvel onglet pour comparer avec ce guide">Ouvrir dans l’app ↗</a>
+  </div>
+  <div class="card-body pt-3 px-3 pb-3">
+    <p class="small text-muted mb-2 mb-md-3 cs-guide-context-lead">À faire dans l’ordre : repérer chaque élément sur votre écran, puis vérifier avec le schéma en bas.</p>
+    <p class="small mb-2"><span class="text-muted">Page concernée :</span> <code class="user-select-all cs-guide-context-url"><%= pathUrl %></code></p>
+    <% if (typeof bullets !== "undefined" && bullets && bullets.length) { %>
+      <p class="small fw-semibold text-body mb-2">Où regarder :</p>
+      <ol class="cs-guide-context-steps small mb-3">
+        <% bullets.forEach(function(b){ %><li><%- b %></li><% }) %>
+      </ol>
+    <% } %>
+    <p class="small fw-semibold text-body mb-2">Schéma simplifié (même page, vue d’ensemble) :</p>
+    <div class="cs-guide-mock rounded border bg-white p-2">
+      <% var v = mockVariant || "nav"; %>
+      <% if (v === "nav_dashboard") { %>
+        <div class="cs-guide-mock-bar text-white small px-2 py-2 rounded-top mb-2">Barre bleue (navigation)</div>
+        <div class="d-flex flex-wrap gap-1 small mb-2">
+          <span class="cs-guide-mock-pill cs-guide-mock-pill--active">Tableau de bord</span>
+          <span class="cs-guide-mock-pill">Clients</span>
+          <span class="cs-guide-mock-pill">Catalogue</span>
+          <span class="cs-guide-mock-pill">Commandes</span>
+          <span class="cs-guide-mock-pill">Factures</span>
+          <span class="cs-guide-mock-pill">Guide</span>
+          <span class="cs-guide-mock-pill ms-auto">🔔 · Déconnexion</span>
+        </div>
+        <div class="row g-2 small">
+          <div class="col-md-3"><div class="cs-guide-mock-kpi p-2 rounded">Carte chiffre (KPI)</div></div>
+          <div class="col-md-3"><div class="cs-guide-mock-kpi p-2 rounded">Carte chiffre</div></div>
+          <div class="col-md-3"><div class="cs-guide-mock-kpi p-2 rounded">Carte chiffre</div></div>
+          <div class="col-md-3"><div class="cs-guide-mock-kpi p-2 rounded">Carte chiffre</div></div>
+          <div class="col-12 col-md-6"><div class="cs-guide-mock-panel p-3 rounded text-center text-muted">Graphique / liste</div></div>
+          <div class="col-12 col-md-6"><div class="cs-guide-mock-panel p-3 rounded text-center text-muted">Graphique / liste</div></div>
+        </div>
+      <% } else if (v === "clients") { %>
+        <div class="cs-guide-mock-bar text-white small px-2 py-2 rounded-top mb-2">Navigation</div>
+        <div class="d-flex flex-wrap gap-1 small mb-2"><span class="cs-guide-mock-pill">…</span><span class="cs-guide-mock-pill cs-guide-mock-pill--active">Clients</span><span class="cs-guide-mock-pill">…</span></div>
+        <div class="cs-guide-mock-panel p-2 small"><strong>Liste ou fiche client</strong> — colonnes (nom, code, …) ou onglets Sites / Tarifs</div>
+      <% } else if (v === "catalog") { %>
+        <div class="cs-guide-mock-bar text-white small px-2 py-2 rounded-top mb-2">Navigation</div>
+        <div class="d-flex flex-wrap gap-1 small mb-2"><span class="cs-guide-mock-pill">…</span><span class="cs-guide-mock-pill cs-guide-mock-pill--active">Catalogue</span></div>
+        <div class="d-flex flex-wrap gap-1 small mb-2 p-2 bg-light rounded border">
+          <span class="cs-guide-mock-field">Recherche</span>
+          <span class="cs-guide-mock-field">Catégorie ▼</span>
+          <span class="cs-guide-mock-field">Prix min / max</span>
+          <span class="cs-guide-mock-field">Statut ▼</span>
+          <span class="cs-guide-mock-btn">Filtrer</span>
+        </div>
+        <div class="cs-guide-mock-panel p-2 small text-center">Grille de produits ou tableau liste</div>
+      <% } else if (v === "orders") { %>
+        <div class="cs-guide-mock-bar text-white small px-2 py-2 rounded-top mb-2">Navigation</div>
+        <div class="d-flex flex-wrap gap-1 small mb-2"><span class="cs-guide-mock-pill cs-guide-mock-pill--active">Commandes</span></div>
+        <div class="cs-guide-mock-panel p-2 small mb-2">Carte <strong>Filtrer les commandes</strong> (dates, client, cases à cocher Statuts, <span class="cs-guide-mock-btn d-inline-block">Appliquer les filtres</span>)</div>
+        <div class="cs-guide-mock-table small">
+          <div class="cs-guide-mock-tr fw-semibold"><span>Numéro</span><span>Client</span><span>Statut</span><span>Actions logistiques</span><span>TTC</span></div>
+          <div class="cs-guide-mock-tr"><span>ORD-…</span><span>…</span><span class="badge bg-primary">Confirmée</span><span><span class="cs-guide-mock-btn">Expédiée</span></span><span>…</span></div>
+        </div>
+      <% } else if (v === "order_detail") { %>
+        <div class="cs-guide-mock-bar text-white small px-2 py-2 rounded-top mb-2">Fiche commande</div>
+        <div class="small mb-2">En-tête : numéro, client, <strong>badges de statut</strong>, totaux HT / TVA / TTC</div>
+        <div class="row g-2 small">
+          <div class="col-md-8"><div class="cs-guide-mock-panel p-2">Tableau des <strong>lignes produits</strong></div></div>
+          <div class="col-md-4"><div class="cs-guide-mock-panel p-2">Cartes <strong>Approuver / Annuler</strong> ou <strong>Préparer / Expédier / Livrer</strong> selon l’étape</div></div>
+        </div>
+      <% } else if (v === "invoices") { %>
+        <div class="d-flex flex-wrap gap-1 small mb-2"><span class="cs-guide-mock-pill cs-guide-mock-pill--active">Factures</span></div>
+        <div class="cs-guide-mock-panel p-2 small mb-2">Filtres en tête de page + bouton <span class="cs-guide-mock-btn">Nouvelle facture</span></div>
+        <div class="cs-guide-mock-table small cs-guide-mock-table--4">
+          <div class="cs-guide-mock-tr fw-semibold"><span>Numéro</span><span>Client</span><span>Statut</span><span>TTC</span></div>
+          <div class="cs-guide-mock-tr"><span>FAC-…</span><span>…</span><span>Payée / Envoyée</span><span>…</span></div>
+        </div>
+      <% } else if (v === "invoice_detail") { %>
+        <div class="cs-guide-mock-panel p-2 small mb-2">Récap client, statut, montants, <strong>lignes</strong></div>
+        <div class="d-flex flex-wrap gap-1 small">
+          <span class="cs-guide-mock-btn">Finaliser</span>
+          <span class="cs-guide-mock-btn">Ajouter paiement</span>
+          <span class="cs-guide-mock-btn outline">PDF</span>
+        </div>
+      <% } else if (v === "notifications") { %>
+        <div class="text-end small mb-2">Dans la barre bleue : <span class="cs-guide-mock-btn">🔔 3</span> → menu déroulant</div>
+        <div class="cs-guide-mock-panel p-2 small">Liste des alertes + lien <strong>Historique</strong> vers <code>/dashboard/notifications</code></div>
+      <% } else if (v === "team") { %>
+        <div class="small mb-2">Menu <strong>Tableau de bord</strong> → lien paramètres équipe (selon votre libellé) : <code>/dashboard/settings/team</code></div>
+        <div class="cs-guide-mock-table small cs-guide-mock-table--3">
+          <div class="cs-guide-mock-tr fw-semibold"><span>Membre</span><span>Rôle</span><span>Actions</span></div>
+          <div class="cs-guide-mock-tr"><span>email@…</span><span>ADMIN</span><span>Modifier</span></div>
+        </div>
+      <% } else if (v === "guide_page") { %>
+        <div class="row g-2">
+          <div class="col-4"><div class="cs-guide-mock-panel p-2 small text-center">Sommaire (liens)</div></div>
+          <div class="col-8"><div class="cs-guide-mock-panel p-2 small">Texte + encadré bleu « De quoi on parle » + capture</div></div>
+        </div>
+      <% } %>
+    </div>
+    <% if (typeof tip !== "undefined" && tip) { %>
+    <div class="alert alert-light border small mb-0 mt-3 py-2"><strong>Astuce.</strong> <%- tip %></div>
+    <% } %>
+  </div>
+</div>

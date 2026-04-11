@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8">
+    <title><%= customer.companyName %> — Fiche client</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/public/styles/app.css" rel="stylesheet">
+  </head>
+  <body class="bg-light">
+    <%- include("partials/dashboard-header") %>
+    <div class="container py-4 cs-customer-page">
+      <div class="mb-4">
+        <p class="cs-subtle small mb-1">Fiche client</p>
+        <h1 class="h3 cs-page-title mb-2"><%= customer.companyName %></h1>
+        <span class="badge rounded-pill text-bg-light border px-3 py-2"><span class="text-muted">Code</span> · <strong><%= customer.code %></strong></span>
+      </div>
+
+      <ul class="nav nav-pills flex-wrap gap-2 mb-4 cs-customer-tabs">
+        <li class="nav-item"><a class="nav-link <%= tab==='general' ? 'active' : '' %>" href="/dashboard/customers/<%= customer.id %>?tab=general">Informations générales</a></li>
+        <li class="nav-item"><a class="nav-link <%= tab==='sites' ? 'active' : '' %>" href="/dashboard/customers/<%= customer.id %>?tab=sites">Sites</a></li>
+        <li class="nav-item"><a class="nav-link <%= tab==='pricing' ? 'active' : '' %>" href="/dashboard/customers/<%= customer.id %>?tab=pricing">Tarifs spécifiques</a></li>
+        <li class="nav-item"><a class="nav-link <%= tab==='orders' ? 'active' : '' %>" href="/dashboard/customers/<%= customer.id %>?tab=orders">Historique commandes</a></li>
+        <li class="nav-item"><a class="nav-link <%= tab==='invoices' ? 'active' : '' %>" href="/dashboard/customers/<%= customer.id %>?tab=invoices">Factures</a></li>
+      </ul>
+
+      <div class="row g-4">
+        <div class="col-lg-8">
+
+    <% if (tab === "general") { %>
+      <form method="POST" action="/dashboard/customers/<%= customer.id %>/general" class="card border-0 shadow-sm">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <div class="card-header bg-white py-3 border-bottom">
+          <h2 class="h5 mb-0">Modifier les informations</h2>
+          <p class="cs-subtle small mb-0 mt-1"><span class="text-danger" aria-hidden="true">*</span> champ obligatoire. Pour d’autres adresses (livraison / facturation), utilisez l’onglet <a href="/dashboard/customers/<%= customer.id %>?tab=sites">Sites</a> — vous pouvez en ajouter à tout moment.</p>
+        </div>
+        <div class="card-body p-4">
+          <div class="cs-section-title">Identité &amp; légal</div>
+          <div class="row g-3 mb-4">
+            <div class="col-md-6">
+              <label class="form-label" for="cust-code">Code client</label>
+              <input id="cust-code" class="form-control bg-light" value="<%= customer.code %>" readonly />
+              <div class="form-text">Non modifiable</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="cust-company">Raison sociale <span class="text-danger" aria-hidden="true">*</span></label>
+              <input id="cust-company" class="form-control" name="companyName" value="<%= customer.companyName %>" required />
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="cust-country">Pays</label>
+              <input id="cust-country" class="form-control" name="countryCode" value="<%= customer.countryCode %>" maxlength="2" />
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="cust-siret">SIRET</label>
+              <input id="cust-siret" class="form-control" name="siret" value="<%= customer.siret || '' %>" inputmode="numeric" />
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="cust-vat">N° TVA</label>
+              <input id="cust-vat" class="form-control" name="vatNumber" value="<%= customer.vatNumber || '' %>" placeholder="Ex. FR…" />
+            </div>
+          </div>
+
+          <div class="cs-section-title">Contact</div>
+          <div class="row g-3 mb-4">
+            <div class="col-md-6">
+              <label class="form-label" for="cust-email">E-mail</label>
+              <input id="cust-email" class="form-control" type="email" name="email" value="<%= customer.email || '' %>" autocomplete="email" />
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="cust-phone">Téléphone</label>
+              <input id="cust-phone" class="form-control" type="tel" name="phone" value="<%= customer.phone || '' %>" autocomplete="tel" />
+            </div>
+            <div class="col-12">
+              <label class="form-label" for="cust-web">Site web</label>
+              <input id="cust-web" class="form-control" type="url" name="website" value="<%= customer.website || '' %>" placeholder="https://…" />
+            </div>
+          </div>
+
+          <div class="cs-section-title">Conditions commerciales</div>
+          <div class="row g-3 mb-4">
+            <div class="col-md-6">
+              <label class="form-label" for="cust-pay">Conditions de paiement</label>
+              <select id="cust-pay" class="form-select" name="paymentTerms">
+                <% paymentTermsOptions.forEach(function(p) { %>
+                  <option value="<%= p %>" <%= customer.paymentTerms === p ? "selected" : "" %>><%= fr.paymentTerms(p) %></option>
+                <% }) %>
+              </select>
+            </div>
+            <div class="col-12">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="cust-active" name="isActive" <%= customer.isActive ? "checked" : "" %> />
+                <label class="form-check-label" for="cust-active">Client actif (visible pour les commandes et le portail)</label>
+              </div>
+            </div>
+          </div>
+
+          <div class="cs-section-title">Notes internes</div>
+          <div class="mb-0">
+            <label class="form-label visually-hidden" for="cust-notes">Notes</label>
+            <textarea id="cust-notes" class="form-control" name="notes" rows="4" placeholder="Remarques visibles uniquement par votre équipe…"><%= customer.notes || '' %></textarea>
+          </div>
+        </div>
+        <div class="card-footer bg-light border-top py-3 d-flex flex-wrap gap-2 justify-content-end">
+          <button type="submit" class="btn btn-primary px-4">Enregistrer les modifications</button>
+        </div>
+      </form>
+
+      <div class="card border-0 shadow-sm mt-4">
+        <div class="card-header bg-white py-3 border-bottom">
+          <h2 class="h5 mb-0">Espace client (portail)</h2>
+          <p class="cs-subtle small mb-0 mt-2">Identifiants pour vous connecter sur la page <strong>Portail client</strong> et simuler une commande.</p>
+        </div>
+        <div class="card-body p-4">
+          <% if (portalFlashPassword) { %>
+            <div class="alert alert-warning border mb-4" role="alert">
+              <strong>Mot de passe généré</strong> — copiez-le maintenant : il ne sera plus affiché après avoir quitté cette page.
+              <div class="input-group input-group-sm mt-2">
+                <input type="text" class="form-control font-monospace" id="portal-pwd-flash" readonly value="<%= portalFlashPassword %>" />
+                <button type="button" class="btn btn-outline-secondary" id="portal-pwd-copy">Copier</button>
+              </div>
+            </div>
+            <script>
+              (function () {
+                var btn = document.getElementById("portal-pwd-copy");
+                var inp = document.getElementById("portal-pwd-flash");
+                if (!btn || !inp) return;
+                btn.addEventListener("click", function () {
+                  inp.select();
+                  if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(inp.value);
+                  } else {
+                    document.execCommand("copy");
+                  }
+                });
+              })();
+            </script>
+          <% } %>
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label small text-muted mb-1">Identifiant de connexion (e-mail)</label>
+              <input class="form-control bg-light font-monospace" type="text" readonly value="<%= customer.email || '—' %>" />
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small text-muted mb-1">Code client (secours si pas encore de mot de passe)</label>
+              <input class="form-control bg-light font-monospace" type="text" readonly value="<%= customer.code %>" />
+            </div>
+          </div>
+          <p class="small text-muted mb-3">
+            <% if (customer.portalPasswordHash) { %>
+              Un mot de passe est enregistré pour ce compte. Pour <strong>l’afficher ici</strong>, générez-en un nouveau ci-dessous (l’ancien ne fonctionnera plus).
+            <% } else { %>
+              Aucun mot de passe enregistré : vous pouvez vous connecter avec l’e-mail et le <strong>code client</strong>, ou générer un mot de passe.
+            <% } %>
+          </p>
+          <div class="d-flex flex-wrap gap-2 align-items-center">
+            <a class="btn btn-outline-primary" href="/portal/login" target="_blank" rel="noopener noreferrer">Ouvrir la page de connexion portail</a>
+            <form method="POST" action="/dashboard/customers/<%= customer.id %>/portal-test-credentials" class="d-inline">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+              <button class="btn btn-primary" type="submit" <% if (!customer.email) { %>disabled title="Renseignez l'e-mail du client ci-dessus et enregistrez"<% } %>>Générer un mot de passe (affiché une fois ici)</button>
+            </form>
+          </div>
+          <p class="small cs-subtle mb-0 mt-3">Pour envoyer les identifiants par e-mail au client, utilisez <strong>Renvoyer accès portail</strong> dans la colonne de droite.</p>
+        </div>
+      </div>
+    <% } %>
+
+    <% if (tab === "sites") { %>
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white py-3 border-bottom">
+          <h2 class="h5 mb-0">Sites de livraison &amp; facturation</h2>
+          <p class="cs-subtle small mb-0 mt-2">Même si le client n’a qu’un seul site à la création, vous pouvez en ajouter d’autres (succursales, entrepôts…), les modifier ou les retirer. Il doit toujours rester au moins un site pour les commandes. <span class="text-danger" aria-hidden="true">*</span> champ obligatoire sur les formulaires concernés.</p>
+        </div>
+        <div class="card-body p-0 p-md-4">
+      <% if (typeof siteError !== "undefined" && siteError) { %>
+        <div class="alert alert-warning mx-3 mx-md-4 mt-3 mb-0" role="alert"><%= siteError %></div>
+      <% } %>
+      <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light"><tr><th>Libellé</th><th>Adresse</th><th>Type</th><th>Contact</th><th class="text-end">Actions</th></tr></thead>
+        <tbody>
+          <% customer.sites.forEach(function(s) { %>
+            <tr>
+              <td class="fw-medium"><%= s.label %><% if (s.isDefault) { %> <span class="badge text-bg-secondary ms-1">Défaut</span><% } %></td>
+              <td><%= s.fullAddress %></td>
+              <td><span class="small"><%= s.isShipping ? "Livraison " : "" %><%= s.isBilling ? "Facturation" : "" %></span></td>
+              <td class="small text-muted"><%= s.contactName || "—" %><br><%= s.contactEmail || "" %></td>
+              <td class="text-end">
+                <button class="btn btn-sm btn-outline-primary" type="button" onclick="document.getElementById('edit-<%= s.id %>').classList.toggle('d-none')">Éditer</button>
+                <form method="POST" action="/dashboard/customers/<%= customer.id %>/sites/<%= s.id %>/delete" class="d-inline">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                  <button class="btn btn-sm btn-outline-danger" type="submit">Supprimer</button>
+                </form>
+              </td>
+            </tr>
+            <tr id="edit-<%= s.id %>" class="d-none table-light">
+              <td colspan="5" class="p-3">
+                <form method="POST" action="/dashboard/customers/<%= customer.id %>/sites/<%= s.id %>/update" class="row g-2">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                  <div class="col-md-3"><label class="form-label small">Libellé <span class="text-danger" aria-hidden="true">*</span></label><input class="form-control" name="label" value="<%= s.label %>" required /></div>
+                  <div class="col-md-4"><label class="form-label small">Adresse <span class="text-danger" aria-hidden="true">*</span></label><input class="form-control" name="fullAddress" value="<%= s.fullAddress %>" required /></div>
+                  <div class="col-md-2"><label class="form-label small">Contact</label><input class="form-control" name="contactName" value="<%= s.contactName || '' %>" placeholder="Nom" /></div>
+                  <div class="col-md-2"><label class="form-label small">E-mail</label><input class="form-control" name="contactEmail" value="<%= s.contactEmail || '' %>" /></div>
+                  <div class="col-md-1 d-flex align-items-end"><button class="btn btn-sm btn-primary w-100" type="submit">Valider</button></div>
+                  <div class="col-12">
+                    <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="isDefault" id="d-<%= s.id %>" <%= s.isDefault ? "checked":"" %> /><label class="form-check-label" for="d-<%= s.id %>">Défaut</label></div>
+                    <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="isShipping" id="sh-<%= s.id %>" <%= s.isShipping ? "checked":"" %> /><label class="form-check-label" for="sh-<%= s.id %>">Livraison</label></div>
+                    <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="isBilling" id="bi-<%= s.id %>" <%= s.isBilling ? "checked":"" %> /><label class="form-check-label" for="bi-<%= s.id %>">Facturation</label></div>
+                    <input class="form-control form-control-sm d-inline-block mt-2" style="max-width:220px" name="contactPhone" value="<%= s.contactPhone || '' %>" placeholder="Téléphone" />
+                  </div>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+      </div>
+      <div class="border-top p-4 bg-light">
+      <h3 class="h6 cs-section-title border-0 pb-0 mb-3">Ajouter un site</h3>
+      <form method="POST" action="/dashboard/customers/<%= customer.id %>/sites" class="row g-3">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <div class="col-md-4"><label class="form-label small">Libellé <span class="text-danger" aria-hidden="true">*</span></label><input class="form-control" name="label" placeholder="Ex. Siège, Entrepôt…" required /></div>
+        <div class="col-md-8"><label class="form-label small">Adresse complète <span class="text-danger" aria-hidden="true">*</span></label><input class="form-control" name="fullAddress" required /></div>
+        <div class="col-md-4"><label class="form-label small">Contact</label><input class="form-control" name="contactName" placeholder="Nom" /></div>
+        <div class="col-md-4"><label class="form-label small">E-mail</label><input class="form-control" type="email" name="contactEmail" /></div>
+        <div class="col-md-4"><label class="form-label small">Téléphone</label><input class="form-control" type="tel" name="contactPhone" /></div>
+        <div class="col-12">
+          <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="isDefault" id="new-def" /><label class="form-check-label" for="new-def">Site par défaut</label></div>
+          <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="isShipping" id="new-sh" checked /><label class="form-check-label" for="new-sh">Livraison</label></div>
+          <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="isBilling" id="new-bi" /><label class="form-check-label" for="new-bi">Facturation</label></div>
+        </div>
+        <div class="col-12"><button type="submit" class="btn btn-primary">Ajouter le site</button></div>
+      </form>
+      </div>
+        </div>
+      </div>
+    <% } %>
+
+    <% if (tab === "pricing") { %>
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white py-3 border-bottom"><h2 class="h5 mb-0">Tarifs spécifiques</h2></div>
+        <div class="card-body p-0 p-md-4">
+      <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light"><tr><th>Produit</th><th>Prix</th><th>Remise %</th><th>Qté min</th><th>Validité</th><th class="text-end"></th></tr></thead>
+        <tbody>
+          <% customer.priceLists.forEach(function(p) { %>
+            <tr>
+              <td class="fw-medium"><%= p.product.name %></td>
+              <td><%= p.customPrice %></td>
+              <td><%= p.discountPercent %></td>
+              <td><%= p.minQuantity %></td>
+              <td class="small text-muted"><%= p.validFrom || "—" %> → <%= p.validTo || "—" %></td>
+              <td class="text-end">
+                <form method="POST" action="/dashboard/customers/<%= customer.id %>/prices/<%= p.id %>/delete" class="d-inline">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                  <button class="btn btn-sm btn-outline-danger" type="submit">Supprimer</button>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+      </div>
+      <div class="border-top p-4 bg-light">
+      <h3 class="h6 mb-3">Ajouter un tarif négocié</h3>
+      <form method="POST" action="/dashboard/customers/<%= customer.id %>/prices" class="row g-3 align-items-end">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <div class="col-md-4"><label class="form-label small">Produit <span class="text-danger" aria-hidden="true">*</span></label><select class="form-select" name="productId" required>
+          <% products.forEach(function(p) { %><option value="<%= p.id %>"><%= p.name %> (<%= p.sku %>)</option><% }) %>
+        </select></div>
+        <div class="col-md-2"><label class="form-label small">Prix HT <span class="text-danger" aria-hidden="true">*</span></label><input class="form-control" name="customPrice" type="number" step="0.01" required /></div>
+        <div class="col-md-2"><label class="form-label small">Remise %</label><input class="form-control" name="discountPercent" type="number" step="0.01" value="0" /></div>
+        <div class="col-md-2"><label class="form-label small">Qté min</label><input class="form-control" name="minQuantity" type="number" value="1" /></div>
+        <div class="col-md-2"></div>
+        <div class="col-md-3"><label class="form-label small">Valide du</label><input class="form-control" name="validFrom" type="date" /></div>
+        <div class="col-md-3"><label class="form-label small">Valide au</label><input class="form-control" name="validTo" type="date" /></div>
+        <div class="col-md-6"><button class="btn btn-primary" type="submit">Ajouter</button></div>
+      </form>
+      </div>
+        </div>
+      </div>
+    <% } %>
+
+    <% if (tab === "orders") { %>
+      <div class="card border-0 shadow-sm"><div class="card-body p-4">
+      <h2 class="h5">Historique des commandes</h2>
+      <p class="cs-subtle mb-0">Vue détaillée à venir. <a href="/dashboard/orders?customerId=<%= customer.id %>">Voir les commandes de ce client</a></p>
+      </div></div>
+    <% } %>
+
+    <% if (tab === "invoices") { %>
+      <div class="card border-0 shadow-sm"><div class="card-body p-4">
+      <h2 class="h5">Factures</h2>
+      <p class="cs-subtle mb-0">Vue détaillée à venir. <a href="/dashboard/invoices?customerId=<%= customer.id %>">Voir les factures de ce client</a></p>
+      </div></div>
+    <% } %>
+
+        </div>
+
+        <div class="col-lg-4">
+          <div class="card border-0 shadow-sm sticky-lg-top" style="top:1rem;">
+            <div class="card-body">
+              <h3 class="h6 mb-3">Actions rapides</h3>
+              <form method="POST" action="/dashboard/customers/<%= customer.id %>/invite-portal" class="mb-3">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                <button class="btn btn-outline-primary w-100" type="submit" <% if (!customer.email) { %>disabled title="Renseignez l'e-mail dans Informations generales"<% } %>>Renvoyer accès portail</button>
+                <p class="small cs-subtle mt-2 mb-0">Génère un <strong>nouveau mot de passe</strong> et l’envoie à l’e-mail du client avec le lien de connexion.</p>
+              </form>
+              <p class="small cs-subtle mb-3">Pour <strong>test interne</strong> sans e-mail : onglet Informations générales, encadré <strong>Espace client</strong> → « Générer un mot de passe (affiché une fois ici) ».</p>
+              <a class="btn btn-outline-secondary w-100" href="/dashboard/customers">← Retour à la liste</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

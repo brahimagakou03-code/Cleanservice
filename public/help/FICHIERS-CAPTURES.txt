@@ -1,0 +1,15 @@
+Placez ici les captures d’écran PNG référencées par la page « Guide administrateur » (/dashboard/guide).
+
+Nommez les fichiers exactement comme ci-dessous (ou mettez à jour la vue admin-guide.ejs si vous changez les noms).
+
+  admin-01-tableau-de-bord.png
+  admin-02-clients-liste.png
+  admin-03-catalogue.png
+  admin-04-commandes-filtres.png
+  admin-05-commande-fiche-actions.png
+  admin-06-factures.png
+  admin-07-facture-suivi-paiement.png
+  admin-08-notifications.png
+  admin-09-equipe.png   (optionnel — section Équipe du guide)
+
+Astuce : fenêtre navigateur ~1280px de large, zone utile sans barre d’adresse si possible.

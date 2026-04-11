@@ -1,0 +1,858 @@
+:root{
+  --cs-primary:#0f3f71;
+  --cs-primary-2:#1b4e86;
+  --cs-accent:#4db7e8;
+  --cs-bg:#f3f7fb;
+  --cs-text:#16324f;
+  --cs-muted:#6e8196;
+  --cs-card:#ffffff;
+}
+body{background:var(--cs-bg)!important;color:var(--cs-text);font-family:Inter,Segoe UI,Arial,sans-serif;}
+.cs-navbar{background:linear-gradient(90deg,var(--cs-primary),var(--cs-primary-2));}
+.cs-logo{
+  height:60px;
+  max-height:76px;
+  max-width:min(320px,58vw);
+  width:auto;
+  object-fit:contain;
+  background:transparent;
+  border-radius:10px;
+  padding:3px 6px;
+  vertical-align:middle;
+}
+/* Pages d’accueil / connexion : logo plus visible et accueillant */
+.cs-logo-hero{
+  height:auto;
+  max-height:128px;
+  width:auto;
+  max-width:min(460px,94vw);
+  object-fit:contain;
+  background:transparent;
+  border-radius:14px;
+  padding:6px 10px;
+  vertical-align:middle;
+}
+@media (min-width: 576px){
+  .cs-logo-hero{ max-height:148px; max-width:min(500px,90vw); }
+}
+@media (min-width: 992px){
+  .cs-logo-hero{ max-height:168px; max-width:min(540px,82vw); }
+}
+.cs-link{color:#dbeafe!important;font-weight:500;padding-bottom:.5rem!important;border-bottom:3px solid transparent}
+.cs-link:hover{color:#fff!important}
+.cs-link.active{color:#fff!important;border-bottom-color:var(--cs-accent)!important}
+
+/* Header portail client : alignement vertical, espacements, bouton déconnexion */
+.cs-navbar-portal{
+  min-height:4.5rem;
+  position:relative;
+  z-index:1050;
+  overflow:visible;
+}
+.cs-navbar-portal .container,
+.cs-navbar-portal .navbar-collapse,
+.cs-navbar-portal .cs-portal-notify-dropdown{
+  overflow:visible;
+}
+.cs-navbar-portal .dropdown-menu.cs-portal-notify-menu{
+  z-index:1060;
+}
+.cs-navbar-portal .navbar-brand{
+  gap:0.75rem !important;
+}
+/* Moins de marge interne : le visuel du logo remplit mieux la barre */
+.cs-navbar-portal .cs-logo-portal{
+  padding:0 2px;
+  height:62px;
+  max-height:80px;
+  max-width:min(320px,54vw);
+  border-radius:8px;
+}
+.cs-portal-notify-menu{
+  min-width:min(340px,96vw);
+  max-width:96vw;
+}
+/* Tableau de bord — graphiques Chart.js (hauteur + canvas block pour un rendu net) */
+.cs-dashboard-chart-wrap{
+  position:relative;
+  isolation:isolate;
+  height:280px;
+  width:100%;
+  min-height:240px;
+}
+.cs-dashboard-chart-wrap canvas{
+  display:block;
+  max-width:100%;
+}
+.cs-dashboard-chart-wrap--sm{
+  height:240px;
+  min-height:200px;
+}
+
+.card{border:0;border-radius:14px;box-shadow:0 6px 20px rgba(15,63,113,.08)}
+.btn-primary{background:var(--cs-primary);border-color:var(--cs-primary)}
+.btn-primary:hover{background:var(--cs-primary-2);border-color:var(--cs-primary-2)}
+.btn-outline-primary{color:var(--cs-primary);border-color:var(--cs-primary)}
+.badge.text-bg-warning{background:#f59e0b!important}
+.table thead th{font-size:.85rem;text-transform:uppercase;color:var(--cs-muted)}
+.table td,.table th{vertical-align:middle}
+.cs-kpi{min-height:128px}
+.cs-subtle{color:var(--cs-muted)}
+.cs-page-title{font-weight:700;letter-spacing:.2px}
+.cs-pill{border-radius:999px;padding:.25rem .65rem}
+
+/* Filtres commandes */
+/* Liste commandes : colonnes montants alignées avec les en-têtes */
+.cs-orders-list-table{
+  table-layout:fixed;
+  width:100%;
+}
+.cs-orders-list-table .cs-olc-numero{width:10%;}
+.cs-orders-list-table .cs-olc-client{width:18%;}
+.cs-orders-list-table .cs-olc-statut{width:14%;}
+.cs-orders-list-table .cs-olc-actions{width:18%;}
+.cs-orders-list-table .cs-olc-ht{width:10%;}
+.cs-orders-list-table .cs-olc-tva{width:10%;}
+.cs-orders-list-table .cs-olc-ttc{width:10%;}
+.cs-orders-list-table .cs-olc-date{width:10%;}
+.cs-orders-list-table thead th.cs-olc-money,
+.cs-orders-list-table tbody td.cs-olc-money,
+.cs-orders-list-table tfoot th.cs-olc-money{
+  padding-left:0.5rem;
+  padding-right:0.75rem;
+}
+.cs-orders-list-table .cs-olc-client-cell{
+  max-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  vertical-align:middle;
+}
+.cs-orders-list-table .cs-olc-statut-cell{
+  vertical-align:middle;
+}
+.cs-orders-list-table .cs-olc-actions-head,
+.cs-orders-list-table .cs-olc-actions-cell{
+  white-space:nowrap;
+}
+.cs-orders-list-table .cs-olc-actions-cell .btn{
+  min-width:8.75rem;
+}
+@media (max-width:991.98px){
+  .cs-orders-list-table .cs-olc-numero{width:12%;}
+  .cs-orders-list-table .cs-olc-client{width:18%;}
+  .cs-orders-list-table .cs-olc-statut{width:15%;}
+  .cs-orders-list-table .cs-olc-actions{width:17%;}
+  .cs-orders-list-table .cs-olc-ht{width:10%;}
+  .cs-orders-list-table .cs-olc-tva{width:10%;}
+  .cs-orders-list-table .cs-olc-ttc{width:10%;}
+  .cs-orders-list-table .cs-olc-date{width:8%;}
+}
+
+.cs-orders-filters .cs-filter-label{
+  font-size:.8rem;
+  font-weight:600;
+  color:var(--cs-muted);
+  margin-bottom:.25rem;
+}
+.cs-orders-filters .cs-status-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
+  gap:.5rem .75rem;
+  padding:.5rem .75rem;
+  background:rgba(15,63,113,.04);
+  border-radius:10px;
+  border:1px solid rgba(15,63,113,.08);
+}
+.cs-orders-filters .form-check{
+  margin-bottom:0;
+  padding-left:1.5rem;
+}
+.cs-orders-filters .form-check-label{
+  font-size:.9rem;
+  line-height:1.35;
+  cursor:pointer;
+}
+.cs-orders-filters .form-check-input{
+  margin-top:.35rem;
+}
+
+/* Fiche client */
+.cs-customer-page .cs-customer-tabs .nav-link{
+  border-radius:10px;
+  color:var(--cs-text);
+  padding:.45rem 1rem;
+  font-weight:500;
+}
+.cs-customer-page .cs-customer-tabs .nav-link:hover{
+  background:rgba(15,63,113,.08);
+}
+.cs-customer-page .cs-customer-tabs .nav-link.active{
+  background:var(--cs-primary);
+  color:#fff!important;
+}
+.cs-customer-page .cs-section-title{
+  font-size:.75rem;
+  font-weight:700;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  color:var(--cs-muted);
+  margin-bottom:1rem;
+  padding-bottom:.5rem;
+  border-bottom:1px solid rgba(15,63,113,.1);
+}
+
+/* Synthèse des lignes — fiche commande */
+.cs-order-lines-card{
+  background:var(--cs-card);
+  border-radius:14px;
+  border:1px solid rgba(15,63,113,.1);
+  box-shadow:0 4px 22px rgba(15,63,113,.07);
+  padding:1.35rem 1.5rem 1.2rem;
+  margin-bottom:1rem;
+}
+.cs-order-lines-card .cs-ol-title{
+  font-size:1.06rem;
+  font-weight:700;
+  color:#2c3d52;
+  letter-spacing:-0.02em;
+  margin:0 0 1rem;
+  line-height:1.3;
+}
+.cs-order-lines-table{
+  width:100%;
+  border-collapse:separate;
+  border-spacing:0;
+  font-size:.9rem;
+}
+.cs-order-lines-table thead th{
+  font-size:.65rem;
+  font-weight:700;
+  letter-spacing:.07em;
+  text-transform:uppercase;
+  color:#8b9aad;
+  padding:.5rem .6rem .65rem;
+  border-bottom:1px solid #e4e9ef;
+  vertical-align:bottom;
+  white-space:nowrap;
+}
+.cs-order-lines-table thead th.cs-ol-th-ref,
+.cs-order-lines-table tbody td.cs-ol-td-ref{
+  padding-left:0;
+}
+.cs-order-lines-table thead th.cs-ol-num,
+.cs-order-lines-table tbody td.cs-ol-num{
+  text-align:right;
+  font-variant-numeric:tabular-nums;
+  padding-left:.75rem;
+}
+.cs-order-lines-table tbody td{
+  padding:.78rem .6rem;
+  color:var(--cs-text);
+  border-bottom:1px solid #f1f4f8;
+  vertical-align:middle;
+  line-height:1.4;
+}
+.cs-order-lines-table tbody tr:last-child td{
+  border-bottom:none;
+}
+.cs-order-lines-table tbody tr:hover td{
+  background:rgba(15,63,113,.025);
+}
+.cs-order-lines-table .cs-ol-name{
+  font-weight:500;
+  color:#1e2d3d;
+}
+.cs-order-lines-table .cs-ol-ref{
+  font-size:.82rem;
+  color:var(--cs-muted);
+  font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
+}
+.cs-order-lines-card .cs-ol-footer{
+  margin-top:1.05rem;
+  padding-top:1rem;
+  border-top:1px solid #e4e9ef;
+  font-size:.875rem;
+  color:var(--cs-muted);
+  font-variant-numeric:tabular-nums;
+  line-height:1.5;
+}
+.cs-order-lines-card .cs-ol-footer strong{
+  color:var(--cs-text);
+  font-weight:600;
+}
+
+/* Fiche commande — totaux mis en avant */
+.cs-order-totals-bar{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:0.75rem;
+  margin-top:1.25rem;
+  padding-top:1.15rem;
+  border-top:2px solid rgba(15,63,113,.12);
+}
+@media (max-width:575.98px){
+  .cs-order-totals-bar{
+    grid-template-columns:1fr;
+  }
+}
+.cs-order-total-cell{
+  background:linear-gradient(180deg,#f6f9fc 0%,#eef3f9 100%);
+  border:1px solid rgba(15,63,113,.1);
+  border-radius:12px;
+  padding:0.85rem 1rem;
+  text-align:center;
+  font-variant-numeric:tabular-nums;
+}
+.cs-order-total-cell--ttc{
+  background:linear-gradient(180deg,#e8f0fa 0%,#d8e6f4 100%);
+  border-color:rgba(15,63,113,.2);
+  box-shadow:0 2px 12px rgba(15,63,113,.08);
+}
+.cs-order-total-label{
+  display:block;
+  font-size:.7rem;
+  font-weight:700;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:#6b7c90;
+  margin-bottom:0.35rem;
+}
+.cs-order-total-value{
+  font-size:1.35rem;
+  font-weight:700;
+  color:var(--cs-primary);
+  line-height:1.2;
+}
+.cs-order-total-cell--ttc .cs-order-total-value{
+  font-size:1.5rem;
+  color:#0a2f56;
+}
+
+/* Fiche commande — historique statuts (timeline) */
+.cs-order-section-title{
+  letter-spacing:.04em;
+  font-weight:700;
+}
+.cs-order-status-card .cs-order-timeline{
+  position:relative;
+}
+.cs-order-timeline-item{
+  position:relative;
+}
+.cs-order-timeline-marker{
+  width:12px;
+  margin-top:0.35rem;
+  position:relative;
+}
+.cs-order-timeline-marker::before{
+  content:"";
+  display:block;
+  width:12px;
+  height:12px;
+  border-radius:50%;
+  background:var(--cs-primary);
+  border:2px solid #fff;
+  box-shadow:0 0 0 2px rgba(15,63,113,.25);
+}
+.cs-order-timeline-item:not(.is-last) .cs-order-timeline-marker::after{
+  content:"";
+  position:absolute;
+  left:5px;
+  top:14px;
+  width:2px;
+  bottom:-0.5rem;
+  background:linear-gradient(180deg,rgba(15,63,113,.25),rgba(15,63,113,.08));
+  border-radius:1px;
+}
+
+/* Fiche commande — panneaux d’actions */
+.cs-order-actions-card .cs-order-actions-toolbar{
+  border-color:rgba(15,63,113,.1)!important;
+}
+.cs-order-action-panel{
+  background:#fafbfd;
+  border-color:rgba(15,63,113,.12)!important;
+}
+.cs-order-action-panel--approve{
+  border-left:4px solid #198754!important;
+}
+.cs-order-action-panel--reject{
+  border-left:4px solid #dc3545!important;
+}
+
+/* Bon de commande — centrage type page A4 sur l’écran */
+.cs-order-todo .cs-order-todo-table thead th{
+  border-bottom:1px solid rgba(15,63,113,.12);
+  font-weight:600;
+  padding-top:.5rem;
+  padding-bottom:.65rem;
+}
+.cs-order-todo .cs-order-todo-table tbody td{
+  border-bottom:1px solid rgba(15,63,113,.06);
+  vertical-align:middle;
+}
+
+.order-bc-sheet{
+  max-width:210mm;
+  margin-left:auto;
+  margin-right:auto;
+  padding-left:.75rem;
+  padding-right:.75rem;
+}
+@media (min-width:992px){
+  .order-bc-sheet{
+    padding-left:1.25rem;
+    padding-right:1.25rem;
+  }
+}
+
+/* ——— Outils dashboard : cartes de page, DnD catégories, boutons d’action ——— */
+.cs-tool-card{
+  border:0;
+  border-radius:14px;
+  box-shadow:0 6px 20px rgba(15,63,113,.08);
+  overflow:hidden;
+}
+.cs-tool-card .card-header{
+  background:linear-gradient(135deg,rgba(15,63,113,.07),rgba(77,183,232,.08));
+  border-bottom:1px solid rgba(15,63,113,.1);
+  font-weight:600;
+  font-size:.95rem;
+  color:var(--cs-primary);
+  padding:.85rem 1.25rem;
+}
+.cs-hint-banner{
+  display:flex;
+  align-items:flex-start;
+  gap:.75rem;
+  padding:.85rem 1rem;
+  border-radius:12px;
+  background:rgba(77,183,232,.12);
+  border:1px solid rgba(15,63,113,.12);
+  font-size:.875rem;
+  color:var(--cs-text);
+  line-height:1.45;
+}
+.cs-hint-banner .cs-hint-icon{
+  flex-shrink:0;
+  width:2rem;
+  height:2rem;
+  border-radius:8px;
+  background:var(--cs-primary);
+  color:#fff;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:1.1rem;
+}
+
+/* Arborescence catégories — glisser-déposer */
+.cs-category-tree{
+  list-style:none;
+  margin:0;
+  padding:0;
+  display:flex;
+  flex-direction:column;
+  gap:.5rem;
+}
+.cs-category-row{
+  display:flex;
+  align-items:center;
+  gap:.75rem;
+  padding:.65rem 1rem .65rem .5rem;
+  background:var(--cs-card);
+  border-radius:12px;
+  border:1px solid rgba(15,63,113,.1);
+  box-shadow:0 2px 8px rgba(15,63,113,.04);
+  transition:border-color .15s ease,box-shadow .15s ease,transform .12s ease,opacity .12s ease;
+  cursor:default;
+}
+.cs-category-row:hover{
+  border-color:rgba(15,63,113,.2);
+  box-shadow:0 4px 14px rgba(15,63,113,.08);
+}
+.cs-category-row.cs-dnd-dragging{
+  opacity:.45;
+  transform:scale(.985);
+}
+.cs-category-row.cs-dnd-over{
+  border-color:var(--cs-accent);
+  box-shadow:0 0 0 3px rgba(77,183,232,.35);
+  background:rgba(77,183,232,.06);
+}
+.cs-drag-handle{
+  flex-shrink:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:2.25rem;
+  height:2.5rem;
+  border-radius:8px;
+  color:var(--cs-muted);
+  cursor:grab;
+  user-select:none;
+  transition:background .15s ease,color .15s ease;
+}
+.cs-drag-handle:hover{
+  background:rgba(15,63,113,.08);
+  color:var(--cs-primary);
+}
+.cs-drag-handle:active{
+  cursor:grabbing;
+}
+.cs-category-row .cs-category-label{
+  flex:1;
+  min-width:0;
+  font-weight:500;
+  color:var(--cs-text);
+  padding-left:.25rem;
+  border-left:3px solid transparent;
+}
+.cs-category-depth-0 .cs-category-label{ border-left-color:var(--cs-primary); }
+.cs-category-depth-1 .cs-category-label{ border-left-color:rgba(15,63,113,.45); padding-left:.5rem; }
+.cs-category-depth-2 .cs-category-label{ border-left-color:rgba(15,63,113,.25); padding-left:.75rem; }
+.cs-category-depth-3 .cs-category-label{ border-left-color:rgba(15,63,113,.15); padding-left:1rem; }
+.cs-category-meta{
+  flex-shrink:0;
+  font-size:.75rem;
+  color:var(--cs-muted);
+  font-variant-numeric:tabular-nums;
+}
+.cs-category-meta .badge{
+  font-weight:500;
+  padding:.35em .55em;
+}
+
+.cs-dnd-root-zone{
+  border:2px dashed rgba(15,63,113,.2);
+  border-radius:12px;
+  background:rgba(15,63,113,.03);
+  transition:border-color .2s ease,background .2s ease,box-shadow .2s ease;
+}
+.cs-dnd-root-zone.cs-dnd-root-active{
+  border-color:var(--cs-accent);
+  background:rgba(77,183,232,.1);
+  box-shadow:inset 0 0 0 1px rgba(77,183,232,.25);
+}
+
+/* Boutons d’action compacts (remplace les liens « éditer / suppr. ») */
+.cs-btn-action{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:.35rem;
+  padding:.35rem .65rem;
+  font-size:.8rem;
+  font-weight:600;
+  border-radius:8px;
+  border:1px solid rgba(15,63,113,.15);
+  background:#fff;
+  color:var(--cs-primary);
+  text-decoration:none;
+  transition:background .15s ease,border-color .15s ease,color .15s ease,box-shadow .15s ease;
+}
+.cs-btn-action:hover{
+  background:rgba(15,63,113,.06);
+  border-color:rgba(15,63,113,.25);
+  color:var(--cs-primary);
+}
+.cs-btn-action-danger{
+  color:#b91c1c;
+  border-color:rgba(185,28,28,.25);
+}
+.cs-btn-action-danger:hover{
+  background:rgba(185,28,28,.08);
+  border-color:rgba(185,28,28,.35);
+  color:#991b1b;
+}
+button.cs-btn-action{
+  cursor:pointer;
+  line-height:inherit;
+}
+.cs-action-group{
+  display:flex;
+  flex-wrap:wrap;
+  gap:.35rem;
+  align-items:center;
+}
+
+/* Tableaux outils (équipe, imports) */
+.cs-table-tools{
+  width:100%;
+  border-collapse:separate;
+  border-spacing:0;
+  font-size:.9rem;
+  background:var(--cs-card);
+  border-radius:12px;
+  overflow:hidden;
+  box-shadow:0 4px 18px rgba(15,63,113,.07);
+  border:1px solid rgba(15,63,113,.08);
+}
+.cs-table-tools thead th{
+  font-size:.7rem;
+  font-weight:700;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  color:var(--cs-muted);
+  padding:.75rem 1rem;
+  background:rgba(15,63,113,.05);
+  border-bottom:1px solid rgba(15,63,113,.1);
+  white-space:nowrap;
+}
+.cs-table-tools tbody td{
+  padding:.75rem 1rem;
+  vertical-align:middle;
+  border-bottom:1px solid rgba(15,63,113,.06);
+}
+.cs-table-tools tbody tr:last-child td{
+  border-bottom:none;
+}
+.cs-table-tools tbody tr:hover td{
+  background:rgba(15,63,113,.03);
+}
+.cs-table-tools .form-select,
+.cs-table-tools .form-control{
+  font-size:.85rem;
+  min-width:8rem;
+}
+.cs-table-tools .btn{
+  font-size:.8rem;
+  font-weight:600;
+  border-radius:8px;
+  padding:.35rem .75rem;
+}
+
+/* Guide administrateur — formation */
+.cs-admin-guide{
+  max-width:1040px;
+}
+.cs-admin-guide .cs-guide-hero{
+  border-radius:12px;
+  border:1px solid rgba(15,63,113,.12);
+  background:linear-gradient(135deg,#fff 0%,#f3f7fc 100%);
+}
+.cs-admin-guide .cs-guide-toc{
+  position:sticky;
+  top:1rem;
+}
+.cs-admin-guide .cs-guide-toc .cs-guide-toc-list{
+  counter-reset:cs-toc;
+  list-style:none;
+  padding-left:0;
+}
+.cs-admin-guide .cs-guide-toc .cs-guide-toc-list li{
+  counter-increment:cs-toc;
+  margin-bottom:.35rem;
+}
+.cs-admin-guide .cs-guide-toc .cs-guide-toc-list a{
+  display:flex;
+  align-items:baseline;
+  gap:.5rem;
+  text-decoration:none;
+  border-radius:8px;
+  padding:.35rem .5rem;
+  color:var(--cs-text);
+  transition:background .15s ease,color .15s ease;
+}
+.cs-admin-guide .cs-guide-toc a::before{
+  content:counter(cs-toc);
+  font-size:.65rem;
+  font-weight:700;
+  min-width:1.35rem;
+  height:1.35rem;
+  line-height:1.35rem;
+  text-align:center;
+  border-radius:999px;
+  background:rgba(15,63,113,.1);
+  color:var(--cs-primary);
+  flex-shrink:0;
+}
+.cs-admin-guide .cs-guide-toc .cs-guide-toc-list a:hover{
+  background:rgba(15,63,113,.08);
+  color:var(--cs-primary);
+}
+.cs-admin-guide .cs-guide-section-lead{
+  font-size:.95rem;
+  color:var(--cs-muted);
+  margin-top:-.25rem;
+  margin-bottom:1rem;
+  max-width:42rem;
+}
+.cs-admin-guide .cs-guide-shot-cap{
+  font-size:.8rem;
+  color:var(--cs-muted);
+  margin-bottom:.35rem;
+}
+.cs-admin-guide .cs-guide-shot-cap .cs-guide-shot-cap-icon{
+  margin-right:.25rem;
+}
+.cs-admin-guide .cs-guide-shot{
+  border:1px solid rgba(15,63,113,.12);
+  border-radius:12px;
+  overflow:hidden;
+  background:#fff;
+}
+.cs-admin-guide .cs-guide-shot-frame{
+  min-height:200px;
+  background:linear-gradient(180deg,#f6f9fc,#eef3f9);
+  border:2px dashed rgba(15,63,113,.2);
+  border-radius:10px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:1rem;
+}
+.cs-admin-guide .cs-guide-shot-frame img{
+  max-height:480px;
+  width:100%;
+  object-fit:contain;
+  background:#fff;
+}
+.cs-admin-guide .cs-guide-shot-frame.is-empty .cs-guide-shot-placeholder{
+  display:flex;
+}
+.cs-admin-guide .cs-guide-shot-placeholder{
+  display:none;
+  flex-direction:column;
+  align-items:center;
+  gap:.5rem;
+  text-align:center;
+  color:var(--cs-muted);
+  font-size:.9rem;
+  max-width:28rem;
+}
+.cs-admin-guide .cs-guide-shot-placeholder code{
+  font-size:.78rem;
+  word-break:break-all;
+}
+
+.cs-guide-context{
+  border-radius:12px;
+  border:1px solid rgba(15,63,113,.18)!important;
+  border-left:4px solid var(--cs-primary)!important;
+  overflow:hidden;
+}
+.cs-guide-context .card-header{
+  border-radius:11px 11px 0 0!important;
+}
+.cs-guide-context-badge{
+  font-weight:600;
+  font-size:.72rem;
+  background:rgba(15,63,113,.12)!important;
+  color:var(--cs-primary)!important;
+  border:1px solid rgba(15,63,113,.2)!important;
+}
+.cs-guide-context-url{
+  font-size:.8rem;
+  padding:.2rem .45rem;
+  background:#f1f4f8;
+  border-radius:6px;
+}
+.cs-guide-context-steps{
+  list-style:none;
+  padding-left:0;
+  margin-left:0;
+  counter-reset:cs-gstep;
+}
+.cs-guide-context-steps li{
+  position:relative;
+  padding-left:2.35rem;
+  margin-bottom:.55rem;
+  line-height:1.45;
+  counter-increment:cs-gstep;
+}
+.cs-guide-context-steps li:last-child{
+  margin-bottom:0;
+}
+.cs-guide-context-steps li::before{
+  content:counter(cs-gstep);
+  position:absolute;
+  left:0;
+  top:.1rem;
+  width:1.55rem;
+  height:1.55rem;
+  line-height:1.55rem;
+  text-align:center;
+  font-size:.72rem;
+  font-weight:700;
+  color:#fff;
+  background:linear-gradient(135deg,var(--cs-primary),var(--cs-primary-2));
+  border-radius:50%;
+  box-shadow:0 1px 3px rgba(15,63,113,.25);
+}
+.cs-guide-mock-table--4 .cs-guide-mock-tr{
+  grid-template-columns:1fr 1fr 1fr 1fr;
+}
+.cs-guide-mock-table--3 .cs-guide-mock-tr{
+  grid-template-columns:1fr 1fr 1fr;
+}
+.cs-guide-mock{
+  font-size:.8rem;
+}
+.cs-guide-mock-bar{
+  background:linear-gradient(90deg,var(--cs-primary),var(--cs-primary-2));
+}
+.cs-guide-mock-pill{
+  padding:.2rem .5rem;
+  border-radius:6px;
+  background:#e8eef5;
+  color:var(--cs-text);
+  border:1px solid rgba(15,63,113,.12);
+}
+.cs-guide-mock-pill--active{
+  background:var(--cs-primary);
+  color:#fff;
+  border-color:transparent;
+}
+.cs-guide-mock-kpi{
+  background:#f6f9fc;
+  border:1px solid rgba(15,63,113,.1);
+  min-height:3.5rem;
+}
+.cs-guide-mock-panel{
+  background:#fafbfd;
+  border:1px dashed rgba(15,63,113,.2);
+  min-height:3rem;
+}
+.cs-guide-mock-field{
+  padding:.25rem .5rem;
+  background:#fff;
+  border:1px solid #ced4da;
+  border-radius:6px;
+  font-size:.72rem;
+  color:var(--cs-muted);
+}
+.cs-guide-mock-btn{
+  padding:.2rem .45rem;
+  background:#212529;
+  color:#fff;
+  border-radius:6px;
+  font-size:.72rem;
+}
+.cs-guide-mock-btn.outline{
+  background:#fff;
+  color:var(--cs-text);
+  border:1px solid #ccc;
+}
+.cs-guide-mock-table{
+  border:1px solid rgba(15,63,113,.15);
+  border-radius:8px;
+  overflow:hidden;
+}
+.cs-guide-mock-tr{
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr 1.2fr 0.8fr;
+  gap:.35rem;
+  padding:.35rem .5rem;
+  border-bottom:1px solid rgba(15,63,113,.08);
+  align-items:center;
+}
+.cs-guide-mock-tr:last-child{
+  border-bottom:none;
+}
+@media (max-width:575.98px){
+  .cs-guide-mock-tr{
+    grid-template-columns:1fr 1fr;
+  }
+}

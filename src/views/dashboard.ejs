@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Tableau de bord</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="/public/styles/app.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+  <%- include("partials/dashboard-header") %>
+  <div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-3"><div><h1 class="h3 cs-page-title mb-0">Tableau de bord</h1><small class="cs-subtle">Rôle : <%= fr.role(user.role) %> - Organisation : <%= user.organizationId %></small></div></div>
+
+    <div class="row g-3 mb-3">
+      <div class="col-md-3"><div class="card p-3 cs-kpi"><div class="text-muted">CA du mois (factures payées)</div><div class="h4 mb-0"><%= stats.kpi.revenueMonth %> EUR</div><small class="<%= stats.kpi.revenueEvolutionPct>=0?'text-success':'text-danger' %>"><%= stats.kpi.revenueEvolutionPct %>% vs mois précédent</small></div></div>
+      <div class="col-md-3"><div class="card p-3 cs-kpi"><div class="text-muted">Commandes du mois</div><div class="h4 mb-0"><%= stats.kpi.ordersMonth %></div><small class="<%= stats.kpi.ordersEvolutionPct>=0?'text-success':'text-danger' %>"><%= stats.kpi.ordersEvolutionPct %>% vs mois précédent</small></div></div>
+      <div class="col-md-3"><div class="card p-3 cs-kpi"><div class="text-muted">Factures en retard</div><div class="h4 mb-0 <%= stats.kpi.overdueCount>0?'text-danger':'' %>"><%= stats.kpi.overdueCount %> / <%= stats.kpi.overdueAmount %> EUR</div></div></div>
+      <div class="col-md-3"><div class="card p-3 cs-kpi"><div class="text-muted">Clients actifs</div><div class="h4 mb-0"><%= stats.customers %></div></div></div>
+    </div>
+
+    <div class="card p-3 mb-3 cs-order-todo">
+      <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+        <div>
+          <h2 class="h6 cs-page-title mb-1">Commandes à faire</h2>
+          <p class="small cs-subtle mb-0">Prochaines étapes du circuit : approbation, préparation, expédition ou livraison (les brouillons et commandes livrées / annulées n’apparaissent pas ici).</p>
+        </div>
+        <a href="/dashboard/orders" class="btn btn-sm btn-outline-primary flex-shrink-0">Toutes les commandes</a>
+      </div>
+      <% if (!lists.ordersTodo.length) { %>
+        <p class="text-muted mb-0 small">Aucune commande en attente d’action pour l’instant.</p>
+      <% } else { %>
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0 cs-order-todo-table">
+            <thead>
+              <tr class="small text-muted text-uppercase" style="font-size:.68rem;letter-spacing:.04em;">
+                <th scope="col">Commande</th>
+                <th scope="col">Client</th>
+                <th scope="col">Statut</th>
+                <th scope="col">À faire</th>
+                <th scope="col" class="text-end">TTC</th>
+                <th scope="col" class="text-end">Créée le</th>
+                <th scope="col" class="text-end"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <% lists.ordersTodo.forEach(function(o) { %>
+              <tr>
+                <td><a href="/dashboard/orders/<%= o.id %>" class="fw-semibold text-decoration-none"><%= o.number %></a></td>
+                <td><%= o.customer.companyName %></td>
+                <td>
+                  <% var st = o.status; %>
+                  <span class="badge rounded-pill <% if (st === 'PENDING_APPROVAL') { %>text-bg-warning<% } else if (st === 'CONFIRMED') { %>text-bg-primary<% } else if (st === 'IN_PREPARATION') { %>text-bg-info<% } else { %>text-bg-secondary<% } %>"><%= fr.orderStatus(o.status) %></span>
+                  <% if (st === 'PENDING_APPROVAL' && !canApproveOrders) { %><div class="small text-muted mt-1">Approbation réservée aux gestionnaires</div><% } %>
+                </td>
+                <td class="small"><%= o.nextActionLabel %></td>
+                <td class="text-end font-monospace"><%= Number(o.totalTtc).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, "\u202f") %>&nbsp;€</td>
+                <td class="text-end small text-muted"><%= o.createdAt.toLocaleDateString("fr-FR") %></td>
+                <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="/dashboard/orders/<%= o.id %>">Ouvrir</a></td>
+              </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+    </div>
+
+    <div class="row g-3 mb-3">
+      <div class="col-md-6"><div class="card p-3"><h2 class="h6 mb-1">CA encaissé par mois (12 mois)</h2><p class="small text-muted mb-2">Données réelles : somme des paiements sur les factures <strong>payées</strong> (date d’encaissement).</p><p class="small text-muted mb-2 d-none cs-chart-empty" data-empty-for="chart-monthly">Aucun encaissement enregistré sur cette période — normal si aucune facture n’est encore marquée payée.</p><div class="cs-dashboard-chart-wrap"><canvas id="chart-monthly" aria-label="Graphique CA mensuel"></canvas></div></div></div>
+      <div class="col-md-6 d-flex flex-column gap-3">
+        <div class="card p-3 flex-grow-1">
+          <h2 class="h6 mb-1">Top 10 clients (encaissements)</h2>
+          <p class="small text-muted mb-2">Argent réellement encaissé : somme des paiements sur factures <strong>payées</strong>. Tant qu’aucune facture n’est finalisée puis marquée payée (ou qu’aucun paiement n’est saisi), ce graphique reste vide — ce n’est pas une erreur.</p>
+          <p class="small text-muted mb-2 d-none cs-chart-empty" data-empty-for="chart-top-clients">Pas encore de factures payées. Créez une facture depuis une commande, finalisez-la, puis enregistrez un paiement sur la fiche facture.</p>
+          <div class="cs-dashboard-chart-wrap cs-dashboard-chart-wrap--sm"><canvas id="chart-top-clients" aria-label="Top clients encaissements"></canvas></div>
+        </div>
+        <div class="card p-3 flex-grow-1">
+          <h2 class="h6 mb-1">Top 10 clients (volume commandes TTC)</h2>
+          <p class="small text-muted mb-2">Utile quand les clients ne font que réserver : total TTC des commandes <strong>hors brouillon et hors annulées</strong> (pipeline / engagements), pas l’argent encaissé.</p>
+          <p class="small text-muted mb-2 d-none cs-chart-empty" data-empty-for="chart-top-clients-orders">Aucune commande éligible pour l’instant.</p>
+          <div class="cs-dashboard-chart-wrap cs-dashboard-chart-wrap--sm"><canvas id="chart-top-clients-orders" aria-label="Top clients volume commandes"></canvas></div>
+        </div>
+      </div>
+      <div class="col-md-6"><div class="card p-3"><h2 class="h6 mb-1">Commandes par statut</h2><p class="small text-muted mb-2">Données réelles : nombre de commandes par statut (toutes les commandes de l’organisation).</p><p class="small text-muted mb-2 d-none cs-chart-empty" data-empty-for="chart-status">Aucune commande pour le moment.</p><div class="cs-dashboard-chart-wrap"><canvas id="chart-status" aria-label="Graphique statuts commandes"></canvas></div></div></div>
+      <div class="col-md-6"><div class="card p-3"><h2 class="h6 mb-1">Volume commandes (TTC) par catégorie</h2><p class="small text-muted mb-2">Données réelles : somme des lignes TTC, sur les commandes <strong>hors brouillon et hors annulées</strong> — ce n’est pas le CA encaissé (voir graphiques de gauche).</p><p class="small text-muted mb-2 d-none cs-chart-empty" data-empty-for="chart-category">Aucune ligne éligible (ou tout est en brouillon / annulé).</p><div class="cs-dashboard-chart-wrap"><canvas id="chart-category" aria-label="Graphique volume par catégorie"></canvas></div></div></div>
+    </div>
+
+    <div class="row g-3">
+      <div class="col-md-6"><div class="card p-3"><h2 class="h6 mb-3">5 dernières commandes</h2><% if (!lists.latestOrders.length) { %><p class="text-muted small mb-0">Aucune commande pour l’instant.</p><% } else { %><ul class="mb-0"><% lists.latestOrders.forEach(function(o){ %><li><a href="/dashboard/orders/<%= o.id %>"><%= o.number %></a> - <%= o.customer.companyName %> - <%= fr.orderStatus(o.status) %></li><% }) %></ul><% } %></div></div>
+      <div class="col-md-6"><div class="card p-3"><h2 class="h6 mb-3">Factures en retard</h2><% if (!lists.overdueInvoices.length) { %><p class="text-muted small mb-0">Aucune facture en retard.</p><% } else { %><ul class="mb-0"><% lists.overdueInvoices.forEach(function(i){ %><li><a href="/dashboard/invoices/<%= i.id %>"><%= i.number || "(brouillon)" %></a> - <%= i.customer.companyName %> - échéance <%= i.dueAt ? i.dueAt.toISOString().slice(0,10) : '-' %></li><% }) %></ul><% } %></div></div>
+      <div class="col-md-6"><div class="card p-3"><h2 class="h6 mb-3">Clients sans commande depuis plus de 30 jours</h2><% if (!lists.retentionAlerts.length) { %><p class="text-muted small mb-0">Tous vos clients actifs ont une activité récente (ou aucun client enregistré).</p><% } else { %><ul class="mb-0"><% lists.retentionAlerts.forEach(function(c){ %><li><%= c.companyName %></li><% }) %></ul><% } %></div></div>
+    </div>
+
+    <div class="mt-4 d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-primary" href="/dashboard/customers">Clients</a>
+      <a class="btn btn-outline-primary" href="/dashboard/catalog">Catalogue</a>
+      <a class="btn btn-outline-primary" href="/dashboard/orders">Commandes</a>
+      <a class="btn btn-outline-primary" href="/dashboard/invoices">Facturation</a>
+      <a class="btn btn-outline-primary" href="/dashboard/settings/team">Équipe</a>
+      <form method="POST" action="/logout"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn btn-outline-danger">Se déconnecter</button></form>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script>
+    (function () {
+      const charts = <%- JSON.stringify(charts) %>;
+      const ChartLib = typeof Chart !== "undefined" ? Chart : null;
+      if (!ChartLib) return;
+
+      var chartDpr = Math.min(typeof window.devicePixelRatio === "number" ? window.devicePixelRatio : 1, 2.5);
+      ChartLib.defaults.font.family = "Inter, Segoe UI, system-ui, sans-serif";
+      ChartLib.defaults.font.size = 13;
+      ChartLib.defaults.color = "#475569";
+      var crispChartOpts = {
+        responsive: true,
+        maintainAspectRatio: false,
+        devicePixelRatio: chartDpr,
+        animation: false,
+      };
+
+      const euro = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
+      const euroFull = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 2 });
+
+      function monthLabel(ym) {
+        if (!ym || typeof ym !== "string") return ym;
+        const parts = ym.split("-");
+        const m = parseInt(parts[1], 10);
+        const y = parts[0] || "";
+        const labels = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
+        return (labels[m - 1] || ym) + " " + y.slice(-2);
+      }
+
+      function showEmptyHint(canvasId, show) {
+        var el = document.querySelector('.cs-chart-empty[data-empty-for="' + canvasId + '"]');
+        if (el) el.classList.toggle("d-none", !show);
+      }
+
+      function sum(arr, key) {
+        return arr.reduce(function (s, x) { return s + Number(x[key] || 0); }, 0);
+      }
+
+      var monthlyTotal = sum(charts.monthlyRevenue || [], "value");
+      var topClientsData = charts.topClients || [];
+      var topTotal = sum(topClientsData, "value");
+      var topOrdersData = charts.topClientsByOrders || [];
+      var topOrdersTotal = sum(topOrdersData, "value");
+      var statusData = (charts.orderStatus || []).filter(function (s) { return Number(s.value) > 0; });
+      var statusTotal = sum(charts.orderStatus || [], "value");
+      var catData = (charts.caByCategory && charts.caByCategory.length)
+        ? charts.caByCategory
+        : [{ name: "—", value: 0 }];
+      var catTotal = sum(charts.caByCategory || [], "value");
+
+      showEmptyHint("chart-monthly", monthlyTotal === 0);
+      showEmptyHint("chart-top-clients", topTotal === 0);
+      showEmptyHint("chart-top-clients-orders", topOrdersTotal === 0);
+      showEmptyHint("chart-status", statusTotal === 0);
+      showEmptyHint("chart-category", catTotal === 0);
+
+      var colors = ["#2563eb", "#059669", "#7c3aed", "#d97706", "#dc2626", "#0891b2", "#4f46e5", "#db2777", "#65a30d", "#ea580c"];
+
+      new ChartLib(document.getElementById("chart-monthly"), {
+        type: "bar",
+        data: {
+          labels: (charts.monthlyRevenue || []).map(function (r) { return monthLabel(r.month); }),
+          datasets: [{
+            label: "CA encaissé",
+            data: (charts.monthlyRevenue || []).map(function (r) { return r.value; }),
+            backgroundColor: "rgba(37, 99, 235, 0.75)",
+            borderRadius: 6,
+          }],
+        },
+        options: Object.assign({}, crispChartOpts, {
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: function (ctx) { return euroFull.format(Number(ctx.raw || 0)); },
+              },
+            },
+          },
+          scales: {
+            x: { grid: { display: false }, ticks: { maxRotation: 45, minRotation: 0, font: { size: 12 } } },
+            y: { beginAtZero: true, ticks: { font: { size: 12 }, callback: function (v) { return euro.format(v); } } },
+          },
+        }),
+      });
+
+      var elTopPaid = document.getElementById("chart-top-clients");
+      if (topTotal > 0 && topClientsData.length) {
+        new ChartLib(elTopPaid, {
+          type: "bar",
+          data: {
+            labels: topClientsData.map(function (c) { return c.name; }),
+            datasets: [{
+              label: "Encaissé",
+              data: topClientsData.map(function (c) { return c.value; }),
+              backgroundColor: "rgba(5, 150, 105, 0.75)",
+              borderRadius: 6,
+            }],
+          },
+          options: Object.assign({}, crispChartOpts, {
+            indexAxis: "y",
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: function (ctx) { return euroFull.format(Number(ctx.raw || 0)); },
+                },
+              },
+            },
+            scales: {
+              x: { beginAtZero: true, ticks: { font: { size: 12 }, callback: function (v) { return euro.format(v); } } },
+              y: { grid: { display: false }, ticks: { font: { size: 12 } } },
+            },
+          }),
+        });
+      } else if (elTopPaid) {
+        elTopPaid.classList.add("d-none");
+      }
+
+      var elTopOrders = document.getElementById("chart-top-clients-orders");
+      if (topOrdersTotal > 0 && topOrdersData.length) {
+        new ChartLib(elTopOrders, {
+          type: "bar",
+          data: {
+            labels: topOrdersData.map(function (c) { return c.name; }),
+            datasets: [{
+              label: "Volume TTC commandes",
+              data: topOrdersData.map(function (c) { return c.value; }),
+              backgroundColor: "rgba(14, 116, 144, 0.8)",
+              borderRadius: 6,
+            }],
+          },
+          options: Object.assign({}, crispChartOpts, {
+            indexAxis: "y",
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: function (ctx) { return euroFull.format(Number(ctx.raw || 0)); },
+                },
+              },
+            },
+            scales: {
+              x: { beginAtZero: true, ticks: { font: { size: 12 }, callback: function (v) { return euro.format(v); } } },
+              y: { grid: { display: false }, ticks: { font: { size: 12 } } },
+            },
+          }),
+        });
+      } else if (elTopOrders) {
+        elTopOrders.classList.add("d-none");
+      }
+
+      var elStatus = document.getElementById("chart-status");
+      if (statusData.length) {
+        new ChartLib(elStatus, {
+          type: "doughnut",
+          data: {
+            labels: statusData.map(function (s) { return s.status; }),
+            datasets: [{
+              data: statusData.map(function (s) { return s.value; }),
+              backgroundColor: statusData.map(function (_, i) { return colors[i % colors.length]; }),
+              borderWidth: 0,
+            }],
+          },
+          options: Object.assign({}, crispChartOpts, {
+            cutout: "52%",
+            plugins: {
+              legend: { position: "right", labels: { boxWidth: 14, font: { size: 12 }, padding: 10 } },
+              tooltip: {
+                callbacks: {
+                  label: function (ctx) {
+                    var v = Number(ctx.raw || 0);
+                    var t = ctx.dataset.data.reduce(function (a, b) { return a + b; }, 0) || 1;
+                    return ctx.label + " : " + v + " (" + Math.round((100 * v) / t) + "%)";
+                  },
+                },
+              },
+            },
+          }),
+        });
+      } else {
+        elStatus.classList.add("d-none");
+      }
+
+      new ChartLib(document.getElementById("chart-category"), {
+        type: "bar",
+        data: {
+          labels: catData.map(function (c) { return c.name; }),
+          datasets: [{
+            label: "Volume TTC",
+            data: catData.map(function (c) { return c.value; }),
+            backgroundColor: "rgba(124, 58, 237, 0.75)",
+            borderRadius: 6,
+          }],
+        },
+        options: Object.assign({}, crispChartOpts, {
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: function (ctx) { return euroFull.format(Number(ctx.raw || 0)); },
+              },
+            },
+          },
+          scales: {
+            x: { grid: { display: false }, ticks: { maxRotation: 40, minRotation: 0, autoSkip: true, font: { size: 11 } } },
+            y: { beginAtZero: true, ticks: { font: { size: 12 }, callback: function (v) { return euro.format(v); } } },
+          },
+        }),
+      });
+    })();
+  </script>
+</body>
+</html>

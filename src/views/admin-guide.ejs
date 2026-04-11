@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Guide administrateur — formation</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="/public/styles/app.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+<%#
+  Guide formation SaaS (admin). Mettre à jour ce fichier lors d’évolutions UX / métier.
+  Captures : public/help/*.png — liste dans public/help/FICHIERS-CAPTURES.txt
+  Révision affichée : src/routes/guide.js → GUIDE_REVISION
+%>
+<%- include("partials/dashboard-header") %>
+<div class="container py-4 cs-admin-guide">
+  <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+    <div>
+      <h1 class="h3 cs-page-title mb-1">Guide administrateur</h1>
+      <p class="text-muted small mb-0">Formation équipe — gestion quotidienne du SaaS. Contenu mis à jour le <strong><%= guideRevision %></strong>.</p>
+    </div>
+    <a class="btn btn-primary" href="/dashboard">Retour au tableau de bord</a>
+  </div>
+
+  <div class="card cs-guide-hero border-0 shadow-sm mb-4">
+    <div class="card-body p-3 p-md-4">
+      <h2 class="h6 text-primary mb-3">Comment utiliser ce guide</h2>
+      <div class="row g-3 small">
+        <div class="col-md-4">
+          <div class="d-flex gap-2">
+            <span class="badge rounded-pill bg-primary align-self-start">1</span>
+            <div><strong>Lisez le cadre bleu</strong> sous chaque titre : il indique la page à ouvrir et <em>où</em> regarder, dans l’ordre.</div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="d-flex gap-2">
+            <span class="badge rounded-pill bg-primary align-self-start">2</span>
+            <div><strong>Cliquez « Ouvrir dans l’app ↗ »</strong> pour afficher la vraie page dans un nouvel onglet et comparer avec le schéma.</div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="d-flex gap-2">
+            <span class="badge rounded-pill bg-primary align-self-start">3</span>
+            <div><strong>Regardez la capture</strong> sous le texte si votre équipe a déposé des images (sinon le schéma suffit pour s’orienter).</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="alert alert-info border-0 shadow-sm mb-4">
+    <strong>Pour les personnes qui forment.</strong> Des photos d’écran peuvent compléter ce guide : placez les fichiers PNG dans <code>public/help/</code> avec les noms indiqués sous chaque zone grise (liste complète dans <code>public/help/FICHIERS-CAPTURES.txt</code>). Elles s’affichent alors toutes seules.
+  </div>
+
+  <div class="row g-4">
+    <div class="col-lg-4">
+      <nav class="card p-3 cs-guide-toc" aria-label="Sommaire du guide">
+        <h2 class="h6 text-muted text-uppercase mb-3">Sommaire</h2>
+        <ol class="cs-guide-toc-list small mb-0">
+          <li><a href="#intro">Introduction</a></li>
+          <li><a href="#dashboard">Tableau de bord</a></li>
+          <li><a href="#clients">Clients &amp; sites</a></li>
+          <li><a href="#catalogue">Catalogue</a></li>
+          <li><a href="#commandes">Commandes &amp; stock</a></li>
+          <li><a href="#factures">Factures &amp; paiements</a></li>
+          <li><a href="#notifications">Notifications</a></li>
+          <li><a href="#equipe">Équipe</a></li>
+        </ol>
+      </nav>
+    </div>
+    <div class="col-lg-8">
+
+      <section id="intro" class="mb-5">
+        <h2 class="h4 cs-page-title">Introduction</h2>
+        <p class="cs-guide-section-lead mb-3">Ce que vous devez savoir avant de naviguer dans l’outil.</p>
+        <%- include("partials/guide-context", { pathUrl: "/dashboard/guide", panelTitle: "Page actuelle", bullets: ["Vous lisez déjà le guide : à gauche, le sommaire ; à droite, les explications.", "Chaque chapitre commence par un encadré « Repères » : même principe partout.", "Le bouton bleu ouvre la page réelle dans un <strong>nouvel onglet</strong> pour ne pas perdre ce guide."], mockVariant: "guide_page" }) %>
+        <p>Cet espace sert à <strong>former les futurs administrateurs</strong> : navigation, rôles, et enchaînement des tâches (clients, catalogue, commandes, facturation). Chaque organisation ne voit que <strong>ses propres données</strong>.</p>
+        <p class="small text-muted mb-0">Connexion équipe : utilisez l’URL fournie par votre responsable, identifiant / mot de passe. Déconnexion via le bouton en haut à droite.</p>
+      </section>
+
+      <section id="dashboard" class="mb-5">
+        <h2 class="h4 cs-page-title">Tableau de bord</h2>
+        <p class="cs-guide-section-lead mb-3">Vue d’ensemble : chiffres clés, graphiques et rappels du jour.</p>
+        <%- include("partials/guide-context", { pathUrl: "/dashboard", panelTitle: "Accueil admin", bullets: ["En haut, la barre bleue : le lien <strong>Tableau de bord</strong> est souligné / actif.", "Juste en dessous : une rangée de <strong>cartes chiffres</strong> (KPI).", "Plus bas : <strong>graphiques</strong> et <strong>listes</strong> (dernières commandes, factures, à traiter)."], mockVariant: "nav_dashboard", tip: "Commencez toujours ici pour voir ce qui mérite une action aujourd’hui." }) %>
+        <p>Indicateurs, graphiques (encaissements, volumes de commandes, statuts) et listes de rappels (commandes à traiter, factures en retard).</p>
+        <p class="cs-guide-shot-cap mb-0"><span class="cs-guide-shot-cap-icon" aria-hidden="true">▣</span>Photo d’écran optionnelle pour la formation</p>
+        <div class="cs-guide-shot p-3 mb-2">
+          <div class="cs-guide-shot-frame" data-guide-frame>
+            <img src="/public/help/admin-01-tableau-de-bord.png" alt="Capture : tableau de bord administrateur" class="rounded border shadow-sm" data-guide-img loading="lazy">
+            <div class="cs-guide-shot-placeholder">
+              <span>Emplacement capture</span>
+              <code>public/help/admin-01-tableau-de-bord.png</code>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="clients" class="mb-5">
+        <h2 class="h4 cs-page-title">Clients &amp; sites</h2>
+        <p class="cs-guide-section-lead mb-3">Les fiches client et les adresses utilisées sur les commandes.</p>
+        <%- include("partials/guide-context", { pathUrl: "/dashboard/customers", panelTitle: "Menu Clients", bullets: ["Cliquez <strong>Clients</strong> dans la barre (pas Catalogue).", "Vous voyez une <strong>liste</strong> ; en ouvrant un client, la <strong>fiche</strong> avec sites et coordonnées.", "Chaque <strong>site</strong> sert plus tard à préremplir livraison et facturation sur une commande."], mockVariant: "clients", tip: "Sans site renseigné, les adresses sur les commandes seront moins évidentes à choisir." }) %>
+        <p>Créez et gérez les <strong>fiches clients</strong>. Les <strong>sites</strong> (adresses de livraison / facturation) sont utilisés sur les commandes et sur le suivi facture.</p>
+        <p class="cs-guide-shot-cap mb-0"><span class="cs-guide-shot-cap-icon" aria-hidden="true">▣</span>Photo d’écran optionnelle pour la formation</p>
+        <div class="cs-guide-shot p-3 mb-2">
+          <div class="cs-guide-shot-frame" data-guide-frame>
+            <img src="/public/help/admin-02-clients-liste.png" alt="Capture : liste des clients" class="rounded border shadow-sm" data-guide-img loading="lazy">
+            <div class="cs-guide-shot-placeholder">
+              <span>Emplacement capture</span>
+              <code>public/help/admin-02-clients-liste.png</code>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="catalogue" class="mb-5">
+        <h2 class="h4 cs-page-title">Catalogue</h2>
+        <p class="cs-guide-section-lead mb-3">Produits, prix, images — et stock si vous le suivez.</p>
+        <%- include("partials/guide-context", { pathUrl: "/dashboard/catalog", panelTitle: "Menu Catalogue", bullets: ["Ouvrez <strong>Catalogue</strong> dans la barre.", "En haut de page : les <strong>filtres</strong> (recherche, catégorie, prix, statut) puis <strong>Filtrer</strong>.", "Dans la liste ou la grille : repérez la colonne ou le champ <strong>stock</strong> — c’est lui qui pilote le suivi automatique avec les commandes."], mockVariant: "catalog", tip: "Si le stock est vide ou non utilisé, les commandes ne déclencheront pas de mouvements de stock." }) %>
+        <p>Produits, catégories, prix HT/TVA, images, import/export CSV. Filtres (recherche, catégorie, prix, statut, tri). Le champ <strong>stock</strong> sur un produit active le suivi automatique (voir commandes).</p>
+        <p class="cs-guide-shot-cap mb-0"><span class="cs-guide-shot-cap-icon" aria-hidden="true">▣</span>Photo d’écran optionnelle pour la formation</p>
+        <div class="cs-guide-shot p-3 mb-2">
+          <div class="cs-guide-shot-frame" data-guide-frame>
+            <img src="/public/help/admin-03-catalogue.png" alt="Capture : catalogue produits" class="rounded border shadow-sm" data-guide-img loading="lazy">
+            <div class="cs-guide-shot-placeholder">
+              <span>Emplacement capture</span>
+              <code>public/help/admin-03-catalogue.png</code>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="commandes" class="mb-5">
+        <h2 class="h4 cs-page-title">Commandes &amp; stock</h2>
+        <p class="cs-guide-section-lead mb-3">Suivre les commandes, les statuts et l’impact sur le stock.</p>
+        <%- include("partials/guide-context", { pathUrl: "/dashboard/orders", panelTitle: "Étape 1 — Liste", bullets: ["Cliquez <strong>Commandes</strong> dans la barre.", "Repérez la carte <strong>Filtrer les commandes</strong> : dates, client, cases à cocher des statuts, puis <strong>Appliquer les filtres</strong>.", "Dans le tableau, la colonne <strong>Actions logistiques</strong> propose des raccourcis (ex. marquer <strong>Expédiée</strong>)."], mockVariant: "orders", tip: "La liste est faite pour traiter beaucoup de commandes vite ; la fiche (étape 2) sert aux détails et aux autres boutons." }) %>
+        <p><strong>Parcours type</strong> : brouillon → éventuelle approbation → confirmée → préparation → expédiée → livrée (ou annulée). Sur la liste, des actions rapides permettent notamment <strong>expédiée</strong> / <strong>livrée</strong> ; le client peut recevoir une notification selon les transitions.</p>
+        <p><strong>Stock</strong> (si quantités renseignées sur les produits) : à la <strong>confirmation</strong>, les quantités sont <strong>réservées</strong>. À l’<strong>expédition</strong>, le stock est <strong>décrémenté</strong>. Une <strong>annulation</strong> libère les réservations ; si la commande était déjà expédiée ou livrée, les quantités sont <strong>réintégrées</strong>.</p>
+        <p class="cs-guide-shot-cap mb-0"><span class="cs-guide-shot-cap-icon" aria-hidden="true">▣</span>Capture : liste et filtres</p>
+        <div class="cs-guide-shot p-3 mb-2">
+          <div class="cs-guide-shot-frame" data-guide-frame>
+            <img src="/public/help/admin-04-commandes-filtres.png" alt="Capture : liste des commandes et filtres" class="rounded border shadow-sm" data-guide-img loading="lazy">
+            <div class="cs-guide-shot-placeholder">
+              <span>Emplacement capture</span>
+              <code>public/help/admin-04-commandes-filtres.png</code>
+            </div>
+          </div>
+        </div>
+        <%- include("partials/guide-context", { pathUrl: "/dashboard/orders", panelTitle: "Étape 2 — Fiche commande", bullets: ["Revenez à la liste si besoin, puis cliquez le <strong>numéro</strong> de commande (ex. ORD-…).", "En haut de la fiche : <strong>badges de statut</strong> et montants HT / TVA / TTC.", "Sur le côté : les boutons d’action (<strong>Confirmer</strong>, <strong>Expédier</strong>, etc.) — ils changent selon l’étape et pilotent aussi le stock."], mockVariant: "order_detail", tip: "<strong>Confirmer</strong> réserve le stock ; <strong>Expédier</strong> le sort du dépôt. <strong>Annuler</strong> annule la réservation, ou réintègre si la commande était déjà partie." }) %>
+        <p class="cs-guide-shot-cap mb-0"><span class="cs-guide-shot-cap-icon" aria-hidden="true">▣</span>Capture : fiche et boutons d’action</p>
+        <div class="cs-guide-shot p-3 mb-2">
+          <div class="cs-guide-shot-frame" data-guide-frame>
+            <img src="/public/help/admin-05-commande-fiche-actions.png" alt="Capture : fiche commande et actions" class="rounded border shadow-sm" data-guide-img loading="lazy">
+            <div class="cs-guide-shot-placeholder">
+              <span>Emplacement capture</span>
+              <code>public/help/admin-05-commande-fiche-actions.png</code>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="factures" class="mb-5">
+        <h2 class="h4 cs-page-title">Factures &amp; paiements</h2>
+        <p class="cs-guide-section-lead mb-3">Créer un suivi, enregistrer les paiements et le lien avec le tableau de bord.</p>
+        <%- include("partials/guide-context", { pathUrl: "/dashboard/invoices", panelTitle: "Étape 1 — Liste", bullets: ["Ouvrez <strong>Factures</strong> dans la barre.", "Repérez <strong>Nouvelle facture</strong> et les filtres en haut de page.", "Le tableau liste numéro, client, statut, TTC — <strong>cliquez une ligne</strong> pour ouvrir le détail."], mockVariant: "invoices", tip: "On part souvent d’une commande déjà validée pour préremplir la facture de suivi." }) %>
+        <p>Création à partir d’une <strong>commande validée</strong> (non déjà facturée) : client + commande, brouillon, finalisation (numéro + PDF), puis <strong>saisie des paiements</strong> pour marquer payée (visible dans les encaissements du tableau de bord). La facturation « officielle » peut rester ailleurs : ici, l’essentiel est le <strong>suivi et la validation du paiement</strong>.</p>
+        <p class="cs-guide-shot-cap mb-0"><span class="cs-guide-shot-cap-icon" aria-hidden="true">▣</span>Capture : liste des factures</p>
+        <div class="cs-guide-shot p-3 mb-2">
+          <div class="cs-guide-shot-frame" data-guide-frame>
+            <img src="/public/help/admin-06-factures.png" alt="Capture : liste des factures" class="rounded border shadow-sm" data-guide-img loading="lazy">
+            <div class="cs-guide-shot-placeholder">
+              <span>Emplacement capture</span>
+              <code>public/help/admin-06-factures.png</code>
+            </div>
+          </div>
+        </div>
+        <%- include("partials/guide-context", { pathUrl: "/dashboard/invoices", panelTitle: "Étape 2 — Détail facture", bullets: ["Depuis la liste, ouvrez une ligne : l’adresse se termine par un <strong>numéro</strong> (identifiant de la facture).", "Vérifiez les <strong>lignes</strong>, les montants et le <strong>statut</strong>.", "Les boutons courants : <strong>Finaliser</strong>, <strong>Ajouter paiement</strong>, et le lien <strong>PDF</strong>."], mockVariant: "invoice_detail", tip: "Marquer une facture comme payée met à jour les indicateurs « encaissements » sur le tableau de bord." }) %>
+        <p class="cs-guide-shot-cap mb-0"><span class="cs-guide-shot-cap-icon" aria-hidden="true">▣</span>Capture : fiche et paiement</p>
+        <div class="cs-guide-shot p-3 mb-2">
+          <div class="cs-guide-shot-frame" data-guide-frame>
+            <img src="/public/help/admin-07-facture-suivi-paiement.png" alt="Capture : fiche facture et paiement" class="rounded border shadow-sm" data-guide-img loading="lazy">
+            <div class="cs-guide-shot-placeholder">
+              <span>Emplacement capture</span>
+              <code>public/help/admin-07-facture-suivi-paiement.png</code>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="notifications" class="mb-5">
+        <h2 class="h4 cs-page-title">Notifications</h2>
+        <p class="cs-guide-section-lead mb-3">Alertes en direct et historique complet.</p>
+        <%- include("partials/guide-context", { pathUrl: "/dashboard/notifications", panelTitle: "Cloche + page historique", bullets: ["En haut à droite : la <strong>cloche</strong> avec un badge (nombre de non lus).", "Le menu déroulant montre un aperçu et le bouton <strong>Historique</strong>.", "La page <code>/dashboard/notifications</code> regroupe toutes les alertes avec des liens <strong>Voir</strong>."], mockVariant: "notifications", tip: "Même logique sur toutes les pages : la cloche reste au même endroit." }) %>
+        <p>Utile pour les validations, les paiements, le stock bas, etc.</p>
+        <p class="cs-guide-shot-cap mb-0"><span class="cs-guide-shot-cap-icon" aria-hidden="true">▣</span>Photo d’écran optionnelle pour la formation</p>
+        <div class="cs-guide-shot p-3 mb-2">
+          <div class="cs-guide-shot-frame" data-guide-frame>
+            <img src="/public/help/admin-08-notifications.png" alt="Capture : notifications" class="rounded border shadow-sm" data-guide-img loading="lazy">
+            <div class="cs-guide-shot-placeholder">
+              <span>Emplacement capture</span>
+              <code>public/help/admin-08-notifications.png</code>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="equipe" class="mb-5">
+        <h2 class="h4 cs-page-title">Équipe</h2>
+        <p class="cs-guide-section-lead mb-3">Inviter des collègues et gérer les rôles.</p>
+        <%- include("partials/guide-context", { pathUrl: "/dashboard/settings/team", panelTitle: "Paramètres équipe", bullets: ["Depuis le <strong>tableau de bord</strong>, utilisez le lien <strong>Équipe</strong> (ou équivalent) — adresse directe <code>/dashboard/settings/team</code>.", "En haut : formulaire pour <strong>inviter</strong> par e-mail.", "En dessous : tableau des membres, <strong>rôle</strong> et actions (modifier, activer / désactiver)."], mockVariant: "team", tip: "Seuls les profils autorisés voient cette page : si le lien manque, ce n’est pas un bug, c’est un droit." }) %>
+        <p>Les permissions limitent certaines actions (approbation, gestion clients, etc.).</p>
+        <p class="cs-guide-shot-cap mb-0"><span class="cs-guide-shot-cap-icon" aria-hidden="true">▣</span>Photo d’écran optionnelle pour la formation</p>
+        <div class="cs-guide-shot p-3 mb-2">
+          <div class="cs-guide-shot-frame" data-guide-frame>
+            <img src="/public/help/admin-09-equipe.png" alt="Capture : paramètres équipe" class="rounded border shadow-sm" data-guide-img loading="lazy">
+            <div class="cs-guide-shot-placeholder">
+              <span>Emplacement capture (optionnel)</span>
+              <code>public/help/admin-09-equipe.png</code>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  document.querySelectorAll("[data-guide-frame]").forEach(function (frame) {
+    var img = frame.querySelector("[data-guide-img]");
+    if (!img) return;
+    function refresh() {
+      if (!img.complete) return;
+      if (img.naturalWidth === 0) frame.classList.add("is-empty");
+      else frame.classList.remove("is-empty");
+    }
+    img.addEventListener("load", refresh);
+    img.addEventListener("error", function () { frame.classList.add("is-empty"); });
+    refresh();
+  });
+})();
+</script>
+</body>
+</html>

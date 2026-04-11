@@ -1,0 +1,44 @@
+{
+  "name": "test-clean-service",
+  "version": "1.0.0",
+  "description": "",
+  "main": "src/server.js",
+  "scripts": {
+    "postinstall": "prisma generate",
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "db:migrate": "npx prisma migrate dev --name init",
+    "db:push": "npx prisma db push",
+    "db:seed": "node prisma/seed.js",
+    "catalog:reset-clean": "node scripts/seed-clean-services-catalog.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
+    "csurf": "^1.11.0",
+    "csv-parse": "^6.2.1",
+    "dotenv": "^17.4.0",
+    "ejs": "^5.0.1",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.3.2",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.1.1",
+    "node-cron": "^4.2.1",
+    "nodemailer": "^8.0.4",
+    "pdfkit": "^0.18.0",
+    "prisma": "^5.22.0",
+    "xlsx": "^0.18.5",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}

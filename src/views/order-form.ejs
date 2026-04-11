@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="UTF-8"><title>Création de commande</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"><link href="/public/styles/app.css" rel="stylesheet"></head>
+<body class="bg-light"><%- include("partials/dashboard-header") %><div class="container py-4">
+  <h1 class="h3">Création de commande (étapes)</h1>
+  <p class="small text-muted mb-2"><span class="text-danger" aria-hidden="true">*</span> Champ obligatoire</p>
+  <form method="POST" action="/dashboard/orders" class="card p-3">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <div class="mb-3"><h2 class="h5">1. Client</h2>
+      <input id="customerSearch" class="form-control" placeholder="Rechercher un client…">
+      <label class="form-label mt-2" for="customerId">Client <span class="text-danger" aria-hidden="true">*</span></label>
+      <select class="form-select" id="customerId" name="customerId" required><option value="">Sélectionner...</option><% customers.forEach(function(c){ %><option value="<%= c.id %>"><%= c.companyName %></option><% }) %></select>
+    </div>
+    <div class="mb-3"><h2 class="h5">2. Adresses</h2>
+      <div class="row g-2"><div class="col-md-6"><label>Livraison</label><select id="deliverySiteId" class="form-select" name="deliverySiteId"></select></div><div class="col-md-6"><label>Facturation</label><select id="billingSiteId" class="form-select" name="billingSiteId"></select></div></div>
+    </div>
+    <div class="mb-3"><h2 class="h5">3. Lignes produits</h2>
+      <div class="row g-2">
+        <div class="col-md-5"><input id="productSearch" class="form-control" placeholder="Rechercher un produit…"></div>
+        <div class="col-md-2"><input id="qty" class="form-control" type="number" value="1" min="1"></div>
+        <div class="col-md-2"><input id="discount" class="form-control" type="number" value="0" min="0" max="100" step="0.1"></div>
+        <div class="col-md-3"><button class="btn btn-outline-primary w-100" id="addLine" type="button">Ajouter une ligne</button></div>
+      </div>
+      <input id="linesJson" type="hidden" name="linesJson">
+      <table class="table table-sm mt-2"><thead><tr><th>Produit</th><th>Réf.</th><th>Qté</th><th>PU HT</th><th>Remise %</th><th>TVA</th><th>TTC</th></tr></thead><tbody id="linesBody"></tbody></table>
+    </div>
+    <div class="mb-3"><h2 class="h5">4. Récapitulatif</h2>
+      <div>Total HT: <span id="totalHt">0.00</span> | TVA: <span id="totalTva">0.00</span> | TTC: <span id="totalTtc">0.00</span></div>
+      <textarea class="form-control mt-2" name="notes" placeholder="Notes client"></textarea>
+      <textarea class="form-control mt-2" name="internalNotes" placeholder="Notes internes"></textarea>
+      <input class="form-control mt-2" type="date" name="requestedDeliveryDate">
+    </div>
+    <div class="d-flex gap-2"><button class="btn btn-secondary" name="actionType" value="draft">Enregistrer brouillon</button><button class="btn btn-primary" name="actionType" value="confirm">Confirmer</button></div>
+  </form>
+  <p class="mt-3"><a class="btn btn-outline-secondary" href="/dashboard/orders">Retour</a></p>
+</div>
+<script>
+  const customers = <%- JSON.stringify(customers) %>;
+  const products = <%- JSON.stringify(products.map(p=>({id:p.id,name:p.name,sku:p.sku,vatRate:Number(p.vatRate),image:(p.imageUrls||'').split('|')[0]||null,basePriceHt:Number(p.basePriceHt)}))) %>;
+  let lines = []; let selectedProduct = null;
+  const customerSelect = document.getElementById("customerId");
+  const delivery = document.getElementById("deliverySiteId"); const billing = document.getElementById("billingSiteId");
+  const linesBody = document.getElementById("linesBody");
+  function renderLines(){ linesBody.innerHTML=''; let ht=0,ttc=0; lines.forEach((l,i)=>{ const lineHt=l.quantity*l.unitPriceHt*(1-l.discountPercent/100); const lineTtc=lineHt*(1+l.vatRate/100); ht+=lineHt; ttc+=lineTtc; linesBody.innerHTML += `<tr><td>${l.productNameSnapshot}</td><td>${l.productSkuSnapshot}</td><td>${l.quantity}</td><td>${l.unitPriceHt.toFixed(2)}</td><td>${l.discountPercent}</td><td>${l.vatRate}</td><td>${lineTtc.toFixed(2)}</td></tr>`; }); document.getElementById("totalHt").innerText=ht.toFixed(2); document.getElementById("totalTva").innerText=(ttc-ht).toFixed(2); document.getElementById("totalTtc").innerText=ttc.toFixed(2); document.getElementById("linesJson").value=JSON.stringify(lines); }
+  document.getElementById("customerSearch").addEventListener("input",(e)=>{ const q=e.target.value.toLowerCase(); const found=customers.filter(c=>c.companyName.toLowerCase().includes(q)); if(found[0]) customerSelect.value=found[0].id; customerSelect.dispatchEvent(new Event("change"));});
+  customerSelect.addEventListener("change", async ()=>{ if(!customerSelect.value) return; const ctx=await fetch(`/dashboard/orders/customer/${customerSelect.value}/context`).then(r=>r.json()); delivery.innerHTML=''; billing.innerHTML=''; ctx.sites.forEach(s=>{ const opt=`<option value="${s.id}">${s.label} - ${s.fullAddress}</option>`; delivery.innerHTML += opt; billing.innerHTML += opt; });});
+  document.getElementById("productSearch").addEventListener("input", async (e)=>{ const q=e.target.value; const c=customerSelect.value; const rows=await fetch(`/dashboard/orders/autocomplete/products?q=${encodeURIComponent(q)}&customerId=${c}`).then(r=>r.json()); selectedProduct = rows[0] || null; });
+  document.getElementById("addLine").addEventListener("click", ()=>{ if(!selectedProduct) return; const qty=Number(document.getElementById("qty").value||1); const discount=Number(document.getElementById("discount").value||0); lines.push({productId:selectedProduct.id,productNameSnapshot:selectedProduct.name,productSkuSnapshot:selectedProduct.sku,quantity:qty,unitPriceHt:Number(selectedProduct.price),discountPercent:discount,vatRate:Number(selectedProduct.vatRate)}); renderLines(); });
+</script>
+</body></html>

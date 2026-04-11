@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Historique des commandes — <%= customer.companyName %></title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="/public/styles/app.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+  <%- include("partials/portal-header") %>
+  <div class="container py-4 pb-5">
+    <nav aria-label="fil d'Ariane" class="mb-3">
+      <ol class="breadcrumb mb-0 small">
+        <li class="breadcrumb-item"><a href="/portal">Accueil</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Historique des commandes</li>
+      </ol>
+    </nav>
+    <h1 class="h4 mb-1">Historique des commandes</h1>
+    <p class="cs-subtle small mb-4"><%= totalCount %> commande<%= totalCount !== 1 ? "s" : "" %> au total</p>
+
+    <% if (!orders.length) { %>
+      <div class="card border-0 shadow-sm">
+        <div class="card-body text-muted">Vous n’avez pas encore passé de commande.</div>
+      </div>
+    <% } else { %>
+      <div class="card border-0 shadow-sm">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light small text-uppercase text-muted">
+              <tr>
+                <th scope="col">N° commande</th>
+                <th scope="col">Date</th>
+                <th scope="col">Statut</th>
+                <th class="text-end" scope="col">Total TTC</th>
+                <th class="text-end" scope="col"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <% const statusBadge = { DRAFT: "secondary", PENDING_APPROVAL: "warning", CONFIRMED: "primary", IN_PREPARATION: "info", SHIPPED: "dark", DELIVERED: "success", CANCELLED: "danger" }; %>
+              <% orders.forEach(function(o) { %>
+                <tr>
+                  <td class="fw-semibold"><a href="/portal/commandes/<%= o.id %>" class="text-decoration-none text-dark"><%= o.number %></a></td>
+                  <td><%= new Date(o.createdAt).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }) %></td>
+                  <td><span class="badge text-bg-<%= statusBadge[o.status] || "secondary" %>"><%= fr.orderStatus(o.status) %></span></td>
+                  <td class="text-end font-monospace"><%= Number(o.totalTtc).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, "\u202f") %> €</td>
+                  <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="/portal/commandes/<%= o.id %>">Détails</a></td>
+                </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <% if (totalPages > 1) { %>
+        <nav class="mt-3 d-flex flex-wrap align-items-center gap-2" aria-label="Pagination">
+          <span class="text-muted small">Page <%= page %> / <%= totalPages %></span>
+          <% if (page > 1) { %><a class="btn btn-sm btn-outline-dark" href="<%= pageHref(page - 1) %>">Précédent</a><% } %>
+          <% if (page < totalPages) { %><a class="btn btn-sm btn-outline-dark" href="<%= pageHref(page + 1) %>">Suivant</a><% } %>
+        </nav>
+      <% } %>
+    <% } %>
+  </div>
+</body>
+</html>
