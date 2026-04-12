@@ -5,11 +5,16 @@
   "main": "src/server.js",
   "scripts": {
     "postinstall": "prisma generate",
+    "build": "prisma generate",
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "db:migrate": "npx prisma migrate dev --name init",
     "db:push": "npx prisma db push",
     "db:seed": "node prisma/seed.js",
+    "db:supabase:setup": "prisma generate && prisma db push && prisma db seed",
+    "sql:schema": "node scripts/regenerate-schema-sql.js",
+    "sql:export-local": "node scripts/export-sqlite-to-pg-sql.js",
+    "sql:supabase-import": "node scripts/build-supabase-import-sql.js",
     "catalog:reset-clean": "node scripts/seed-clean-services-catalog.js"
   },
   "keywords": [],
@@ -21,6 +26,7 @@
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
+    "@supabase/supabase-js": "^2.103.0",
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
     "csurf": "^1.11.0",
@@ -35,10 +41,12 @@
     "nodemailer": "^8.0.4",
     "pdfkit": "^0.18.0",
     "prisma": "^5.22.0",
+    "serverless-http": "^3.2.0",
     "xlsx": "^0.18.5",
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "nodemon": "^3.1.14"
+    "nodemon": "^3.1.14",
+    "sql.js": "^1.14.1"
   }
 }

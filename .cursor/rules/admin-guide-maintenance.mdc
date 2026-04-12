@@ -1,0 +1,15 @@
+---
+description: Mettre à jour le guide administrateur quand l’UX ou le métier admin évolue
+alwaysApply: true
+---
+
+# Guide administrateur (/dashboard/guide)
+
+Lors d’une modification qui change le **parcours ou les fonctionnalités côté administrateur** (commandes, stock, factures, catalogue, clients, notifications, équipe, tableau de bord) :
+
+1. Ouvrir `src/views/admin-guide.ejs` et **ajuster le texte** (sommaire, explications, étapes).
+2. Incrémenter ou mettre à jour **`GUIDE_REVISION`** dans `src/routes/guide.js`.
+3. Si de **nouvelles captures** sont nécessaires : ajouter le fichier sous `public/help/` (voir `public/help/FICHIERS-CAPTURES.txt`) et référencer l’image dans `admin-guide.ejs` (même modèle que les blocs existants).
+4. Pour une **fonctionnalité majeure** sans capture immédiate : documenter quand même dans le guide ; la capture peut suivre.
+
+Ne pas laisser le guide **contredire** le comportement réel de l’application.

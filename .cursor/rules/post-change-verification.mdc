@@ -1,0 +1,19 @@
+---
+description: Après chaque modification, vérifier routes et liens du site puis signaler les corrections
+alwaysApply: true
+---
+
+# Vérification après modification
+
+À la **fin de chaque demande de modification** qui touche le code du projet (routes, vues, middleware, logique métier) :
+
+1. **Redémarrer ou confirmer** que le serveur (`npm run start`) reflète bien le code actuel (en cas de doute, tuer le processus sur le port 3000 puis relancer).
+2. **Tester les routes HTTP** principales avec `curl` (ou équivalent) :
+   - Public : `/`, `/login`, `/register`, `/portal/login`, `/public/styles/app.css`
+   - Portail (sans cookie client) : `/portal`, `/portal/commandes`, `/portal/notifications` → attendre **302** vers `/portal/login`
+   - Admin (sans session) : `/dashboard`, `/dashboard/orders`, `/dashboard/catalog`, `/dashboard/guide`, etc. → **302** vers `/login`
+   - API sans auth : `/api/clients` → **302** ou **401** selon la config (documenter le comportement attendu)
+3. **Si un test échoue** : corriger le code (ordre des `app.use`, routes manquantes, middleware), puis **re-tester** et **indiquer clairement à l’utilisateur** ce qui était cassé et ce qui a été corrigé.
+4. Les parcours **connectés** (formulaires POST, actions métier) ne peuvent pas tous être automatisés sans identifiants : les signaler explicitement si non couverts.
+
+Cette vérification est **systématique** après toute modification fonctionnelle livrée à l’utilisateur.

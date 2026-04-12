@@ -1,0 +1,26 @@
+# Express via fonction serverless — pas de site statique seul.
+# Supabase plus tard : définir quand même DATABASE_URL (PostgreSQL) dans Netlify → Environment variables.
+
+[build]
+  command = "npm run build"
+  publish = "netlify/publish"
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Cookies CSRF en HTTPS (obligatoire sur Netlify)
+[context.production.environment]
+  CSRF_COOKIE_SECURE = "true"
+
+[context.deploy-preview.environment]
+  CSRF_COOKIE_SECURE = "true"
+
+[functions]
+  # Fichiers servis par Express (static + vues EJS) + schéma Prisma
+  included_files = ["public/**", "src/**", "prisma/schema.prisma"]
+
+[[redirects]]
+  from = "/*"
+  to = "/.netlify/functions/server"
+  status = 200

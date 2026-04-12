@@ -7,8 +7,18 @@ const fs = require("node:fs");
 const path = require("node:path");
 const multer = require("multer");
 
-const uploadDir = path.join(process.cwd(), "public", "uploads");
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+const isServerless =
+  Boolean(process.env.NETLIFY) ||
+  Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME) ||
+  Boolean(process.env.VERCEL);
+const uploadDir = isServerless
+  ? path.join(require("node:os").tmpdir(), "clean-service-uploads")
+  : path.join(process.cwd(), "public", "uploads");
+try {
+  if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+} catch {
+  /* FS en lecture seule sur certaines plateformes serverless */
+}
 
 const productImageStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadDir),
