@@ -20,6 +20,7 @@ const { i18nFr } = require("./middleware/i18nFr");
 const { earlyMultipartBeforeCsrf } = require("./middleware/earlyMultipartBeforeCsrf");
 const { loadPlatformBranding } = require("./middleware/platformBranding");
 const { csrfWithLoginBypass, attachCsrfToken } = require("./middleware/csrfAuthBypass");
+const { netlifyEventFormBodyMerge } = require("./middleware/netlifyEventFormBody");
 
 const app = express();
 app.set("trust proxy", true);
@@ -70,6 +71,7 @@ app.use(
     },
   }),
 );
+app.use(netlifyEventFormBodyMerge);
 app.use(express.json());
 app.use(cookieParser());
 app.use(i18nFr);
