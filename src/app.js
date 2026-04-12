@@ -31,12 +31,17 @@ app.use("/public", express.static(path.join(process.cwd(), "public")));
 app.use("/branding", express.static(path.join(process.cwd(), "public", "branding")));
 app.use("/uploads", express.static(path.join(process.cwd(), "public", "uploads")));
 app.use("/invoices", express.static(path.join(process.cwd(), "public", "invoices")));
-/** POST type formulaire : certains proxies (ex. Netlify) omettent ou tronquent Content-Type. */
+/**
+ * POST formulaires : sur Netlify, Content-Type peut être absent ou exotique pour /login, /register, /portal/login.
+ * Pour ces routes, on force le parsing x-www-form-urlencoded (sauf multipart / json).
+ */
 function urlencodedTypeMatcher(req) {
   if (req.method !== "POST") return false;
+  const p = req.path || "";
   const ct = String(req.headers["content-type"] || "").toLowerCase();
   if (ct.includes("multipart/form-data")) return false;
   if (ct.includes("application/json")) return false;
+  if (p === "/login" || p === "/register" || p === "/portal/login") return true;
   if (ct.includes("application/x-www-form-urlencoded")) return true;
   if (!ct.trim()) return true;
   return false;
@@ -49,8 +54,11 @@ app.use(
     limit: "2mb",
     verify: (req, _res, buf) => {
       if (req.method !== "POST" || !buf || !buf.length) return;
+      const p = req.path || "";
       const ct = String(req.headers["content-type"] || "").toLowerCase();
       if (ct.includes("multipart/form-data") || ct.includes("application/json")) return;
+      const authPost = p === "/login" || p === "/register" || p === "/portal/login";
+      if (!authPost && !ct.includes("application/x-www-form-urlencoded") && ct.trim()) return;
       try {
         const raw = buf.toString("utf8");
         if (!raw.includes("=")) return;

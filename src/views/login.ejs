@@ -6,6 +6,9 @@
     <div class="container py-5" style="max-width:540px;">
     <div class="text-center mb-4"><img src="<%= typeof platformLogoUrl !== 'undefined' ? platformLogoUrl : '/branding/logo.png' %>" class="cs-logo-hero" alt="Clean Service"></div>
     <h1 class="h3 text-center mb-3">Connexion</h1>
+    <% if (typeof loginAlert !== "undefined" && loginAlert) { %>
+    <div class="alert alert-warning mb-3" role="alert"><%= loginAlert %></div>
+    <% } %>
     <p class="small text-muted text-center mb-2"><span class="text-danger" aria-hidden="true">*</span> Champ obligatoire</p>
     <form method="POST" action="/login" class="card p-3">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>" />

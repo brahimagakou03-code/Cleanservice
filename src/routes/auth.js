@@ -96,24 +96,33 @@ router.post("/register", async (req, res) => {
 
 router.get("/login", async (req, res) => {
   if (await redirectIfStaffAuthenticated(req, res)) return;
-  return res.render("login");
+  const err = typeof req.query.err === "string" ? req.query.err : "";
+  let loginAlert = null;
+  if (err === "champs") {
+    loginAlert =
+      "Merci de remplir l’e-mail et le mot de passe. Si le problème persiste, rechargez la page (Ctrl+F5) puis réessayez.";
+  }
+  if (err === "auth") {
+    loginAlert = "E-mail ou mot de passe incorrect.";
+  }
+  return res.render("login", { loginAlert });
 });
 
 router.post("/login", loginLimiter, async (req, res) => {
   const body = mergeFormBody(req);
   const { email, password } = body;
   if (!email || !password) {
-    return res.status(400).send("Email et mot de passe obligatoires.");
+    return res.redirect(302, "/login?err=champs");
   }
 
   const user = await prisma.user.findUnique({ where: { email }, include: { organization: true } });
   if (!user || !user.isActive) {
-    return res.status(401).send("Identifiants invalides.");
+    return res.redirect(302, "/login?err=auth");
   }
 
   const valid = await comparePassword(password, user.passwordHash);
   if (!valid) {
-    return res.status(401).send("Identifiants invalides.");
+    return res.redirect(302, "/login?err=auth");
   }
 
   await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
