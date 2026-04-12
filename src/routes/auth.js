@@ -14,6 +14,7 @@ const {
   clearAuthCookies,
 } = require("../utils/auth");
 const { Role } = require("../utils/rbac");
+const { mergeFormBody } = require("../utils/mergeFormBody");
 
 const router = express.Router();
 
@@ -58,7 +59,8 @@ router.get("/register", async (req, res) => {
 });
 
 router.post("/register", async (req, res) => {
-  const { orgName, slug, siret, address, phone, orgEmail, logo, email, password, firstName, lastName } = req.body;
+  const body = mergeFormBody(req);
+  const { orgName, slug, siret, address, phone, orgEmail, logo, email, password, firstName, lastName } = body;
   if (!orgName || !slug || !siret || !address || !phone || !orgEmail || !email || !password || !firstName || !lastName) {
     return res.status(400).send("Tous les champs obligatoires doivent etre remplis.");
   }
@@ -98,7 +100,8 @@ router.get("/login", async (req, res) => {
 });
 
 router.post("/login", loginLimiter, async (req, res) => {
-  const { email, password } = req.body;
+  const body = mergeFormBody(req);
+  const { email, password } = body;
   if (!email || !password) {
     return res.status(400).send("Email et mot de passe obligatoires.");
   }

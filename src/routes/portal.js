@@ -15,6 +15,7 @@ const { requireClientPortalAuth } = require("../middleware/portalAuth");
 const { attachPortalNotifications } = require("../middleware/portalNotifications");
 const { TYPE, notifyUsersByRoles } = require("../utils/notifications");
 const { assertPortalCartStockAvailable } = require("../utils/orderStock");
+const { mergeFormBody } = require("../utils/mergeFormBody");
 
 const router = express.Router();
 
@@ -129,9 +130,10 @@ async function portalCredentialsValid(customer, password, code) {
 }
 
 router.post("/login", async (req, res) => {
-  const email = String(req.body.email || "").trim().toLowerCase();
-  const password = String(req.body.password || "");
-  const code = String(req.body.code || "");
+  const body = mergeFormBody(req);
+  const email = String(body.email || "").trim().toLowerCase();
+  const password = String(body.password || "");
+  const code = String(body.code || "");
   if (!email) {
     return res.status(400).render("portal-login", { loginError: "L’adresse e-mail est obligatoire." });
   }

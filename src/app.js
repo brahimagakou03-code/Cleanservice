@@ -31,7 +31,22 @@ app.use("/public", express.static(path.join(process.cwd(), "public")));
 app.use("/branding", express.static(path.join(process.cwd(), "public", "branding")));
 app.use("/uploads", express.static(path.join(process.cwd(), "public", "uploads")));
 app.use("/invoices", express.static(path.join(process.cwd(), "public", "invoices")));
-app.use(express.urlencoded({ extended: true }));
+app.use(
+  express.urlencoded({
+    extended: true,
+    verify: (req, _res, buf) => {
+      if (req.method !== "POST" || !buf || !buf.length) return;
+      const ct = String(req.headers["content-type"] || "").toLowerCase();
+      if (!ct.includes("application/x-www-form-urlencoded")) return;
+      try {
+        const flat = Object.fromEntries(new URLSearchParams(buf.toString()));
+        if (Object.keys(flat).length) req._formBodyFallback = flat;
+      } catch {
+        /* ignore */
+      }
+    },
+  }),
+);
 app.use(express.json());
 app.use(cookieParser());
 app.use(i18nFr);
