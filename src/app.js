@@ -4,7 +4,6 @@ const path = require("node:path");
 const express = require("express");
 const multer = require("multer");
 const cookieParser = require("cookie-parser");
-const csrf = require("csurf");
 const authRoutes = require("./routes/auth");
 const dashboardRoutes = require("./routes/dashboard");
 const apiRoutes = require("./routes/api");
@@ -20,7 +19,7 @@ const { loadDashboardLayout } = require("./middleware/dashboardLayout");
 const { i18nFr } = require("./middleware/i18nFr");
 const { earlyMultipartBeforeCsrf } = require("./middleware/earlyMultipartBeforeCsrf");
 const { loadPlatformBranding } = require("./middleware/platformBranding");
-const { useSecureCookies } = require("./utils/cookieFlags");
+const { csrfWithLoginBypass, attachCsrfToken } = require("./middleware/csrfAuthBypass");
 
 const app = express();
 app.set("trust proxy", true);
@@ -49,19 +48,8 @@ app.use((req, res, next) => {
   next();
 });
 
-const csrfProtection = csrf({
-  cookie: {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: useSecureCookies(),
-    path: "/",
-  },
-});
-app.use(csrfProtection);
-app.use((req, res, next) => {
-  res.locals.csrfToken = req.csrfToken();
-  next();
-});
+app.use(csrfWithLoginBypass);
+app.use(attachCsrfToken);
 
 app.get("/", (_req, res) => res.render("choose-portal"));
 
