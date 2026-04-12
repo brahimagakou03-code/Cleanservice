@@ -17,6 +17,9 @@
   CSRF_COOKIE_SECURE = "true"
 
 [functions]
+  # nft suit mieux les require dynamiques ; ejs doit rester dans node_modules (Express le charge sans import statique).
+  node_bundler = "nft"
+  external_node_modules = ["ejs"]
   # Fichiers servis par Express (static + vues EJS) + schéma Prisma
   included_files = ["public/**", "src/**", "prisma/schema.prisma"]
 
