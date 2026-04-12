@@ -429,3 +429,11 @@ model EmailQueue {
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
+/// Logo / favicon pages publiques (login, choix de portail). Une seule ligne id = site.
+model PlatformBranding {
+  id             String   @id
+  logoDataUrl    String?  @db.Text
+  faviconDataUrl String?  @db.Text
+  updatedAt      DateTime @updatedAt
+}
+

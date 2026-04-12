@@ -296,4 +296,107 @@ router.post("/settings/team/:id/toggle-active", async (req, res) => {
   return res.redirect("/dashboard/settings/team");
 });
 
+const BRANDING_SITE_ID = "site";
+
+function canManageBranding(role) {
+  return role === Role.OWNER || role === Role.ADMIN;
+}
+
+function assertLogoMime(mimetype) {
+  if (!/^image\/(png|jpeg|pjpeg|webp|gif|svg\+xml)$/i.test(String(mimetype || ""))) {
+    throw new Error("Logo : utilisez PNG, JPEG, WebP, GIF ou SVG.");
+  }
+}
+
+function assertFaviconMime(mimetype, originalname) {
+  const m = String(mimetype || "").toLowerCase();
+  const name = String(originalname || "").toLowerCase();
+  if (/^image\/(png|jpeg|pjpeg|webp|gif|svg\+xml|vnd\.microsoft\.icon|x-icon)$/.test(m)) return;
+  if (m === "application/octet-stream" && name.endsWith(".ico")) return;
+  throw new Error("Favicon : ICO, PNG ou JPEG recommandés (fichier .ico ou image carrée 32×32).");
+}
+
+function toDataUrl(buffer, mimetype) {
+  const mt = String(mimetype || "application/octet-stream").split(";")[0].trim();
+  return `data:${mt};base64,${buffer.toString("base64")}`;
+}
+
+router.get("/branding", async (req, res) => {
+  if (!canManageBranding(req.user.role)) {
+    return res.status(403).send("Accès réservé aux propriétaires et administrateurs.");
+  }
+  let row = null;
+  try {
+    row = await prisma.platformBranding.findUnique({ where: { id: BRANDING_SITE_ID } });
+  } catch {
+    row = null;
+  }
+  return res.render("branding-settings", {
+    hasCustomLogo: Boolean(row?.logoDataUrl),
+    hasCustomFavicon: Boolean(row?.faviconDataUrl),
+  });
+});
+
+router.post("/branding/logo", async (req, res) => {
+  if (!canManageBranding(req.user.role)) {
+    return res.status(403).send("Accès réservé aux propriétaires et administrateurs.");
+  }
+  const f = req.file;
+  if (!f || !f.buffer) return res.status(400).send("Aucun fichier reçu. Glissez-déposez ou choisissez un fichier.");
+  try {
+    assertLogoMime(f.mimetype);
+  } catch (e) {
+    return res.status(400).send(e.message);
+  }
+  const dataUrl = toDataUrl(f.buffer, f.mimetype);
+  await prisma.platformBranding.upsert({
+    where: { id: BRANDING_SITE_ID },
+    create: { id: BRANDING_SITE_ID, logoDataUrl: dataUrl },
+    update: { logoDataUrl: dataUrl },
+  });
+  return res.redirect("/dashboard/branding");
+});
+
+router.post("/branding/favicon", async (req, res) => {
+  if (!canManageBranding(req.user.role)) {
+    return res.status(403).send("Accès réservé aux propriétaires et administrateurs.");
+  }
+  const f = req.file;
+  if (!f || !f.buffer) return res.status(400).send("Aucun fichier reçu.");
+  try {
+    assertFaviconMime(f.mimetype, f.originalname);
+  } catch (e) {
+    return res.status(400).send(e.message);
+  }
+  const dataUrl = toDataUrl(f.buffer, f.mimetype);
+  await prisma.platformBranding.upsert({
+    where: { id: BRANDING_SITE_ID },
+    create: { id: BRANDING_SITE_ID, faviconDataUrl: dataUrl },
+    update: { faviconDataUrl: dataUrl },
+  });
+  return res.redirect("/dashboard/branding");
+});
+
+router.post("/branding/reset", async (req, res) => {
+  if (!canManageBranding(req.user.role)) {
+    return res.status(403).send("Accès réservé aux propriétaires et administrateurs.");
+  }
+  const target = String(req.body.target || "all");
+  const data = {};
+  if (target === "logo") data.logoDataUrl = null;
+  else if (target === "favicon") data.faviconDataUrl = null;
+  else if (target === "all") {
+    data.logoDataUrl = null;
+    data.faviconDataUrl = null;
+  } else {
+    return res.status(400).send("Cible de réinitialisation invalide.");
+  }
+  await prisma.platformBranding.upsert({
+    where: { id: BRANDING_SITE_ID },
+    create: { id: BRANDING_SITE_ID, ...data },
+    update: data,
+  });
+  return res.redirect("/dashboard/branding");
+});
+
 module.exports = router;

@@ -1,6 +1,7 @@
 const crypto = require("node:crypto");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const { useSecureCookies } = require("./cookieFlags");
 
 const ACCESS_COOKIE = "access_token";
 const REFRESH_COOKIE = "refresh_token";
@@ -60,18 +61,22 @@ function verifyRefreshToken(token) {
 }
 
 function setAuthCookies(res, accessToken, refreshToken) {
+  const secure = useSecureCookies();
   const cookieOptions = {
     httpOnly: true,
-    secure: false,
+    secure,
     sameSite: "lax",
+    path: "/",
   };
   res.cookie(ACCESS_COOKIE, accessToken, { ...cookieOptions, maxAge: 15 * 60 * 1000 });
   res.cookie(REFRESH_COOKIE, refreshToken, { ...cookieOptions, maxAge: 7 * 24 * 60 * 60 * 1000 });
 }
 
 function clearAuthCookies(res) {
-  res.clearCookie(ACCESS_COOKIE);
-  res.clearCookie(REFRESH_COOKIE);
+  const secure = useSecureCookies();
+  const base = { path: "/", secure, sameSite: "lax" };
+  res.clearCookie(ACCESS_COOKIE, base);
+  res.clearCookie(REFRESH_COOKIE, base);
 }
 
 function signClientPortalToken(customer) {
@@ -93,16 +98,22 @@ function verifyClientPortalToken(token) {
 }
 
 function setClientPortalCookie(res, token) {
+  const secure = useSecureCookies();
   res.cookie(CLIENT_PORTAL_COOKIE, token, {
     httpOnly: true,
-    secure: false,
+    secure,
     sameSite: "lax",
+    path: "/",
     maxAge: 2 * 24 * 60 * 60 * 1000,
   });
 }
 
 function clearClientPortalCookie(res) {
-  res.clearCookie(CLIENT_PORTAL_COOKIE);
+  res.clearCookie(CLIENT_PORTAL_COOKIE, {
+    path: "/",
+    secure: useSecureCookies(),
+    sameSite: "lax",
+  });
 }
 
 module.exports = {

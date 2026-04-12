@@ -58,6 +58,11 @@ const productCatalogUpload = multer({
 
 const importMemoryUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
+const brandingUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 1.5 * 1024 * 1024 },
+});
+
 const RESERVED_CATALOG_SEGMENTS = new Set(["categories", "import", "export", "new"]);
 
 function isMultipart(req) {
@@ -79,6 +84,9 @@ function earlyMultipartBeforeCsrf(req, res, next) {
   }
   if (pathname === "/dashboard/customers/import/preview") {
     return importMemoryUpload.single("file")(req, res, (err) => (err ? next(err) : next()));
+  }
+  if (pathname === "/dashboard/branding/logo" || pathname === "/dashboard/branding/favicon") {
+    return brandingUpload.single("file")(req, res, (err) => (err ? next(err) : next()));
   }
 
   let isProductPost = pathname === "/dashboard/catalog";

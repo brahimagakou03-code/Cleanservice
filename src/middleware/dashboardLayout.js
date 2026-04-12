@@ -23,7 +23,7 @@ async function loadDashboardLayout(req, res, next) {
       currentPath: normalizeRequestPath(req),
       user: req.user,
       notifications: { unread, recent },
-      brandLogoUrl: "/branding/logo.png",
+      brandLogoUrl: res.locals.platformLogoUrl || "/branding/logo.png",
     };
     res.locals.formatEuroHtDisplay = formatEuroHtDisplay;
     res.locals.formatEuroHtInput = formatEuroHtInput;
@@ -33,7 +33,7 @@ async function loadDashboardLayout(req, res, next) {
       currentPath: normalizeRequestPath(req),
       user: req.user,
       notifications: { unread: 0, recent: [] },
-      brandLogoUrl: "/branding/logo.png",
+      brandLogoUrl: res.locals.platformLogoUrl || "/branding/logo.png",
     };
     res.locals.formatEuroHtDisplay = formatEuroHtDisplay;
     res.locals.formatEuroHtInput = formatEuroHtInput;

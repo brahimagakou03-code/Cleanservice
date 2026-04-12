@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Apparence — logo & favicon</title>
+  <%- include("partials/favicon") %>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="/public/styles/app.css" rel="stylesheet">
+  <style>
+    .cs-dropzone {
+      border: 2px dashed #94a3b8;
+      border-radius: 12px;
+      padding: 2rem 1rem;
+      text-align: center;
+      background: #f8fafc;
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+    }
+    .cs-dropzone:hover, .cs-dropzone.cs-dropzone--active {
+      border-color: #0d6efd;
+      background: #eff6ff;
+    }
+    .cs-dropzone input[type=file] { display: none; }
+  </style>
+</head>
+<body class="bg-light">
+<%- include("partials/dashboard-header") %>
+<div class="container py-4" style="max-width: 720px;">
+  <h1 class="h3 cs-page-title mb-2">Apparence</h1>
+  <p class="text-muted small mb-4">
+    Logo et favicon affichés sur la page d’accès, la connexion admin et l’espace client.
+    Fichiers stockés en base (adapté à Netlify). Taille max. ~1,5 Mo par fichier.
+  </p>
+
+  <div class="card cs-tool-card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span>Logo principal</span>
+      <% if (hasCustomLogo) { %>
+      <form method="POST" action="/dashboard/branding/reset" class="m-0" onsubmit="return confirm('Réinitialiser le logo ?');">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <input type="hidden" name="target" value="logo" />
+        <button type="submit" class="btn btn-sm btn-outline-danger">Réinitialiser</button>
+      </form>
+      <% } %>
+    </div>
+    <div class="card-body">
+      <p class="small text-muted mb-3">PNG, JPEG, WebP, GIF ou SVG — déposez le fichier ou cliquez dans la zone.</p>
+      <form id="form-logo" method="POST" action="/dashboard/branding/logo" enctype="multipart/form-data">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <label class="cs-dropzone mb-0" data-dropzone="logo">
+          <input type="file" name="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml,.svg" />
+          <span class="cs-dropzone-label d-block small text-muted">Glisser-déposer ou cliquer pour choisir</span>
+        </label>
+      </form>
+    </div>
+  </div>
+
+  <div class="card cs-tool-card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span>Favicon (onglet du navigateur)</span>
+      <% if (hasCustomFavicon) { %>
+      <form method="POST" action="/dashboard/branding/reset" class="m-0" onsubmit="return confirm('Réinitialiser la favicon ?');">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <input type="hidden" name="target" value="favicon" />
+        <button type="submit" class="btn btn-sm btn-outline-danger">Réinitialiser</button>
+      </form>
+      <% } %>
+    </div>
+    <div class="card-body">
+      <p class="small text-muted mb-3">ICO ou PNG carré (ex. 32×32).</p>
+      <form id="form-favicon" method="POST" action="/dashboard/branding/favicon" enctype="multipart/form-data">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <label class="cs-dropzone mb-0" data-dropzone="favicon">
+          <input type="file" name="file" accept="image/png,image/jpeg,image/x-icon,image/vnd.microsoft.icon,.ico" />
+          <span class="cs-dropzone-label d-block small text-muted">Glisser-déposer ou cliquer pour choisir</span>
+        </label>
+      </form>
+    </div>
+  </div>
+
+  <% if (hasCustomLogo || hasCustomFavicon) { %>
+  <form method="POST" action="/dashboard/branding/reset" class="mb-4" onsubmit="return confirm('Tout réinitialiser (logo + favicon) ?');">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+    <input type="hidden" name="target" value="all" />
+    <button type="submit" class="btn btn-outline-secondary btn-sm">Tout réinitialiser</button>
+  </form>
+  <% } %>
+
+  <p class="small mb-0"><a href="/dashboard">← Retour au tableau de bord</a></p>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+(function () {
+  function wire(formId, zoneSelector) {
+    var form = document.getElementById(formId);
+    if (!form) return;
+    var zone = form.querySelector(zoneSelector);
+    var input = form.querySelector('input[type=file]');
+    var label = zone.querySelector('.cs-dropzone-label');
+    if (!zone || !input) return;
+
+    function setFiles(files) {
+      if (!files || !files.length) return;
+      try {
+        var dt = new DataTransfer();
+        dt.items.add(files[0]);
+        input.files = dt.files;
+      } catch (e) {
+        return;
+      }
+      label.textContent = files[0].name + ' — envoi…';
+      form.submit();
+    }
+
+    zone.addEventListener('click', function () { input.click(); });
+    input.addEventListener('change', function () { setFiles(input.files); });
+    ['dragenter', 'dragover'].forEach(function (ev) {
+      zone.addEventListener(ev, function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        zone.classList.add('cs-dropzone--active');
+      });
+    });
+    ['dragleave', 'drop'].forEach(function (ev) {
+      zone.addEventListener(ev, function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        zone.classList.remove('cs-dropzone--active');
+      });
+    });
+    zone.addEventListener('drop', function (e) {
+      setFiles(e.dataTransfer && e.dataTransfer.files);
+    });
+  }
+  wire('form-logo', '[data-dropzone="logo"]');
+  wire('form-favicon', '[data-dropzone="favicon"]');
+})();
+</script>
+</body>
+</html>

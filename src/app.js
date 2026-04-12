@@ -19,9 +19,11 @@ const { requireAuth, withTenantContext, requireApiAuth } = require("./middleware
 const { loadDashboardLayout } = require("./middleware/dashboardLayout");
 const { i18nFr } = require("./middleware/i18nFr");
 const { earlyMultipartBeforeCsrf } = require("./middleware/earlyMultipartBeforeCsrf");
+const { loadPlatformBranding } = require("./middleware/platformBranding");
+const { useSecureCookies } = require("./utils/cookieFlags");
 
 const app = express();
-app.set("trust proxy", 1);
+app.set("trust proxy", true);
 
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
@@ -34,12 +36,26 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(cookieParser());
 app.use(i18nFr);
+app.use(loadPlatformBranding);
 app.use(earlyMultipartBeforeCsrf);
 
-const csrfCookieSecure =
-  process.env.CSRF_COOKIE_SECURE === "true" || process.env.NODE_ENV === "production";
+/** Évite un HTML /login mis en cache sans le Set-Cookie CSRF (CDN / Netlify). */
+app.use((req, res, next) => {
+  const p = req.path || "";
+  if (req.method === "GET" && (p === "/" || p === "/login" || p === "/register" || p === "/portal/login")) {
+    res.setHeader("Cache-Control", "private, no-store, no-cache, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+  }
+  next();
+});
+
 const csrfProtection = csrf({
-  cookie: { httpOnly: true, sameSite: "lax", secure: csrfCookieSecure },
+  cookie: {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: useSecureCookies(),
+    path: "/",
+  },
 });
 app.use(csrfProtection);
 app.use((req, res, next) => {

@@ -27,6 +27,9 @@
         <li class="nav-item"><a class="nav-link cs-link <%= currentPath.startsWith('/dashboard/orders') ? 'active' : '' %>" href="/dashboard/orders">Commandes</a></li>
         <li class="nav-item"><a class="nav-link cs-link <%= currentPath.startsWith('/dashboard/invoices') ? 'active' : '' %>" href="/dashboard/invoices">Factures</a></li>
         <li class="nav-item"><a class="nav-link cs-link <%= currentPath.startsWith('/dashboard/guide') ? 'active' : '' %>" href="/dashboard/guide">Guide</a></li>
+        <% if (currentUser.role === "OWNER" || currentUser.role === "ADMIN") { %>
+        <li class="nav-item"><a class="nav-link cs-link <%= currentPath.startsWith('/dashboard/branding') ? 'active' : '' %>" href="/dashboard/branding">Apparence</a></li>
+        <% } %>
       </ul>
       <div class="d-flex align-items-center flex-wrap gap-2 ms-lg-auto mt-3 mt-lg-0">
         <div class="dropdown">

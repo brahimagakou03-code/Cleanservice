@@ -427,6 +427,12 @@ async function main() {
     });
   }
 
+  await prisma.platformBranding.upsert({
+    where: { id: "site" },
+    create: { id: "site" },
+    update: {},
+  });
+
   const customers = await prisma.customer.count();
   const products = await prisma.product.count();
   const orders = await prisma.order.count();

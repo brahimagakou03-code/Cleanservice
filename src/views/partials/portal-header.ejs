@@ -5,7 +5,7 @@
 <nav class="navbar navbar-expand-lg navbar-dark cs-navbar cs-navbar-portal mb-4">
   <div class="container">
     <a class="navbar-brand d-flex align-items-center gap-3" href="/portal">
-      <img src="/branding/logo.png" alt="Clean Service" class="cs-logo cs-logo-portal" />
+      <img src="<%= typeof platformLogoUrl !== 'undefined' ? platformLogoUrl : '/branding/logo.png' %>" alt="Clean Service" class="cs-logo cs-logo-portal" />
     </a>
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#portalMainNav" aria-controls="portalMainNav" aria-expanded="false" aria-label="Ouvrir le menu">
       <span class="navbar-toggler-icon"></span>
