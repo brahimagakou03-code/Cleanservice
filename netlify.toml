@@ -8,6 +8,10 @@
 
 [build.environment]
   NODE_VERSION = "20"
+  # Évite les faux positifs : scripts SQL, exemples d’env, règles Cursor (souvent «3000 », « localhost »).
+  SECRETS_SCAN_OMIT_PATHS = ".env.example,scripts/sql/**,.cursor/**"
+  # Ces clés sont surtout de la config d’exécution ; les JWT / clés API restent scannés.
+  SECRETS_SCAN_OMIT_KEYS = "PORT,SMTP_HOST,SMTP_PORT,MAIL_FROM,APP_BASE_URL"
 
 # Cookies CSRF en HTTPS (obligatoire sur Netlify)
 [context.production.environment]

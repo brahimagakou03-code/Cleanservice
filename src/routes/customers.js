@@ -222,7 +222,7 @@ router.post("/", async (req, res) => {
     await prisma.customer.update({ where: { id: customer.id }, data: { authUid: sup.authUid } });
   }
 
-  const baseUrl = process.env.APP_BASE_URL || "http://localhost:3000";
+  const baseUrl = process.env.APP_BASE_URL || "http://127.0.0.1:3000";
   const tpl = clientPortalCredentialsTemplate({
     customerName: customer.companyName,
     loginUrl: `${baseUrl}/login`,
@@ -445,7 +445,7 @@ router.post("/:id/invite-portal", async (req, res) => {
     data: { email: emailNorm, portalPasswordHash, ...(sup.ok ? { authUid: sup.authUid } : {}) },
   });
 
-  const baseUrl = process.env.APP_BASE_URL || "http://localhost:3000";
+  const baseUrl = process.env.APP_BASE_URL || "http://127.0.0.1:3000";
   const tpl = clientPortalCredentialsTemplate({
     customerName: customer.companyName,
     loginUrl: `${baseUrl}/login`,

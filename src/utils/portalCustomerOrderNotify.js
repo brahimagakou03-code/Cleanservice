@@ -22,7 +22,7 @@ async function notifyCustomerOrderOutcome(prisma, { orderId, fromStatus, toStatu
   if (!order?.customer) return;
 
   const customer = order.customer;
-  const baseUrl = process.env.APP_BASE_URL || "http://localhost:3000";
+  const baseUrl = process.env.APP_BASE_URL || "http://127.0.0.1:3000";
 
   const shouldNotifyConfirmed =
     toStatus === S.CONFIRMED && [S.DRAFT, S.PENDING_APPROVAL].includes(fromStatus);

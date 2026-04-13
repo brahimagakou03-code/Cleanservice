@@ -332,7 +332,7 @@ router.post("/:id/send-email", async (req, res) => {
     invoiceNumber: invoice.number,
     amount: invoice.totalTtc,
     dueDate: invoice.dueAt ? invoice.dueAt.toISOString().slice(0, 10) : "-",
-    pdfUrl: `${process.env.APP_BASE_URL || "http://localhost:3000"}${invoice.pdfUrl || ""}`,
+    pdfUrl: `${process.env.APP_BASE_URL || "http://127.0.0.1:3000"}${invoice.pdfUrl || ""}`,
   });
   await enqueueEmail({
     organizationId: invoice.organizationId,

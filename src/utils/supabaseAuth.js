@@ -75,7 +75,7 @@ function isAlreadyRegisteredError(err) {
 }
 
 function getAppBaseUrl() {
-  return String(process.env.APP_BASE_URL || "http://localhost:3000").replace(/\/$/, "");
+  return String(process.env.APP_BASE_URL || "http://127.0.0.1:3000").replace(/\/$/, "");
 }
 
 async function findAuthUserByEmail(svc, emailNorm) {

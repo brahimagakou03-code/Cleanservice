@@ -2,7 +2,7 @@ const nodemailer = require("nodemailer");
 const { prisma } = require("../db");
 
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || "localhost",
+  host: process.env.SMTP_HOST || "127.0.0.1",
   port: Number(process.env.SMTP_PORT || 1025),
   secure: false,
   auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS || "" } : undefined,
@@ -24,7 +24,7 @@ async function processEmailQueue(batchSize = 20) {
   for (const item of pending) {
     try {
       await transporter.sendMail({
-        from: process.env.MAIL_FROM || "noreply@clean-service.store",
+        from: process.env.MAIL_FROM || "no-reply@example.invalid",
         to: item.toEmail,
         subject: item.subject,
         html: item.html,

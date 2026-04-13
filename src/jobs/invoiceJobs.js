@@ -59,7 +59,7 @@ function startInvoiceJobs() {
           invoiceNumber: i.number || "N/A",
           amountDue: i.amountDue,
           dueDate: i.dueAt ? i.dueAt.toISOString().slice(0, 10) : "-",
-          paymentLink: `${process.env.APP_BASE_URL || "http://localhost:3000"}/dashboard/invoices/${i.id}`,
+          paymentLink: `${process.env.APP_BASE_URL || "http://127.0.0.1:3000"}/dashboard/invoices/${i.id}`,
         });
         await enqueueEmail({ organizationId: i.organizationId, toEmail: i.customer.email, subject: tpl.subject, html: tpl.html });
       }
