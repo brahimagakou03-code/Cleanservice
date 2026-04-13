@@ -1,6 +1,7 @@
 /**
  * Clients Supabase (API REST / Auth / Storage).
- * Les tables métier sont gérées par Prisma via DATABASE_URL (PostgreSQL).
+ * L’authentification navigateur repose sur Supabase Auth (@supabase/ssr + cookies) ;
+ * Prisma lie User.authUid / Customer.authUid à auth.users.
  * Ne jamais exposer SUPABASE_SERVICE_ROLE_KEY au navigateur.
  */
 const { createClient } = require("@supabase/supabase-js");

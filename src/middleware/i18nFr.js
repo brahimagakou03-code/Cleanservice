@@ -24,7 +24,8 @@ const INVOICE_TYPE = {
 };
 
 const ROLE = {
-  OWNER: "Administrateur",
+  PLATFORM_ADMIN: "Administrateur Clean Service (siège)",
+  OWNER: "Administrateur franchisé",
   ADMIN: "Co-administrateur",
   MANAGER: "Gestionnaire",
   MEMBER: "Membre",

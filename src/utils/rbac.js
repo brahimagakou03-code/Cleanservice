@@ -1,4 +1,6 @@
 const Role = {
+  /** Siège Clean Service uniquement (organisation `isPlatform`). */
+  PLATFORM_ADMIN: "PLATFORM_ADMIN",
   OWNER: "OWNER",
   ADMIN: "ADMIN",
   MANAGER: "MANAGER",
@@ -7,8 +9,9 @@ const Role = {
 };
 
 const abilities = {
-  [Role.OWNER]: ["*"],
-  [Role.ADMIN]: ["*", "!organization:delete"],
+  [Role.PLATFORM_ADMIN]: ["platform:read", "platform:orgs:view", "team:manage"],
+  [Role.OWNER]: ["*", "!organization:delete"],
+  [Role.ADMIN]: ["*", "!organization:delete", "!team:assign-owner"],
   [Role.MANAGER]: ["clients:manage", "products:manage", "orders:manage", "orders:view"],
   [Role.MEMBER]: ["orders:create", "orders:view:own"],
   [Role.VIEWER]: ["read:all"],

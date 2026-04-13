@@ -6,7 +6,10 @@ const { computeInvoiceTotals } = require("../src/utils/invoicing");
 const prisma = new PrismaClient();
 
 async function createOrgWithUsers(orgData, users) {
-  const org = await prisma.organization.create({ data: orgData });
+  const { isPlatform, ...rest } = orgData;
+  const org = await prisma.organization.create({
+    data: { ...rest, isPlatform: isPlatform === true },
+  });
   for (const user of users) {
     const passwordHash = await bcrypt.hash(user.password, 12);
     await prisma.user.create({
@@ -123,6 +126,29 @@ async function main() {
   await prisma.client.deleteMany();
   await prisma.user.deleteMany();
   await prisma.organization.deleteMany();
+
+  await createOrgWithUsers(
+    {
+      name: "Clean Service (Siège)",
+      slug: "clean-service-siege",
+      siret: "00000000000001",
+      address: "Siège — administration plateforme",
+      phone: "0100000000",
+      email: "siege@clean-service.test",
+      logo: null,
+      approvalThresholdTtc: "0",
+      isPlatform: true,
+    },
+    [
+      {
+        email: "platform@clean.test",
+        password: "Password123!",
+        firstName: "Admin",
+        lastName: "Plateforme",
+        role: "PLATFORM_ADMIN",
+      },
+    ],
+  );
 
   const alpha = await createOrgWithUsers(
     {
@@ -438,7 +464,9 @@ async function main() {
   const orders = await prisma.order.count();
   const invoices = await prisma.invoice.count();
   const payments = await prisma.payment.count();
-  console.log(`Seed termine: 2 organisations, 6 utilisateurs, ${customers} clients CRM, ${products} produits catalogue, ${orders} commandes, ${invoices} factures, ${payments} paiements.`);
+  console.log(
+    `Seed termine: 3 organisations (1 siège + 2 franchisés), 7 utilisateurs, ${customers} clients CRM, ${products} produits catalogue, ${orders} commandes, ${invoices} factures, ${payments} paiements. Connexion siège : platform@clean.test`,
+  );
 }
 
 main()

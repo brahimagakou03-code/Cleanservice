@@ -15,6 +15,7 @@ const portalRoutes = require("./routes/portal");
 const notificationRoutes = require("./routes/notifications");
 const guideRoutes = require("./routes/guide");
 const { requireAuth, withTenantContext, requireApiAuth } = require("./middleware/auth");
+const { enforceDashboardNavScope } = require("./middleware/dashboardScope");
 const { loadDashboardLayout } = require("./middleware/dashboardLayout");
 const { i18nFr } = require("./middleware/i18nFr");
 const { earlyMultipartBeforeCsrf } = require("./middleware/earlyMultipartBeforeCsrf");
@@ -96,7 +97,7 @@ app.get("/", (_req, res) => res.render("choose-portal"));
 /* Portail avant auth monté sur « / » : sinon /portal/* peut ne jamais atteindre ce routeur (Express 5). */
 app.use("/portal", portalRoutes);
 app.use("/", authRoutes);
-const dashboardMw = [requireAuth, withTenantContext, loadDashboardLayout];
+const dashboardMw = [requireAuth, withTenantContext, enforceDashboardNavScope, loadDashboardLayout];
 app.use("/dashboard", ...dashboardMw, dashboardRoutes);
 app.use("/dashboard/customers", ...dashboardMw, customerRoutes);
 app.use("/dashboard/catalog", ...dashboardMw, catalogRoutes);

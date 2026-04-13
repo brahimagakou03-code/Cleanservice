@@ -15,6 +15,7 @@ datasource db {
 
 model Organization {
   id        String   @id @default(cuid())
+  isPlatform Boolean @default(false) // true = siège Clean Service (hors franchisés)
   name      String
   slug      String   @unique
   siret     String   @unique
@@ -52,7 +53,8 @@ model Organization {
 model User {
   id              String   @id @default(cuid())
   email           String   @unique
-  passwordHash    String
+  passwordHash    String? // héritage ; null si session uniquement via Supabase Auth
+  authUid         String?  @unique // auth.users (Supabase)
   firstName       String
   lastName        String
   role            String   @default("MEMBER")
@@ -153,6 +155,7 @@ model Order {
 model Customer {
   id                String   @id @default(cuid())
   organizationId    String
+  authUid           String?  @unique // auth.users (Supabase), portail client
   code              String
   companyName       String
   countryCode       String   @default("FR")

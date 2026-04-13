@@ -16,10 +16,17 @@ function wrapHtml(title, body) {
   </div>`;
 }
 
-function teamInvitationTemplate({ firstName, inviteLink }) {
+function teamInvitationTemplate({ firstName, inviteLink, tempPassword }) {
+  const pwBlock =
+    tempPassword != null && String(tempPassword).length > 0
+      ? `<p><strong>Mot de passe provisoire :</strong> ${escHtml(tempPassword)}</p><p>Connectez-vous sur la page unique de connexion puis changez votre mot de passe dans Supabase (compte) si besoin.</p>`
+      : "";
   return {
     subject: "Invitation equipe",
-    html: wrapHtml("Invitation equipe", `<p>Bonjour ${firstName || ""}, vous etes invite(e) a rejoindre l'equipe.</p><p><a href="${inviteLink}">Accepter l'invitation</a></p>`),
+    html: wrapHtml(
+      "Invitation equipe",
+      `<p>Bonjour ${escHtml(firstName || "")}, vous etes invite(e) a rejoindre l'equipe.</p>${pwBlock}<p><a href="${escHtml(inviteLink)}">Se connecter</a></p>`
+    ),
   };
 }
 
@@ -48,8 +55,8 @@ function clientPortalCredentialsTemplate({ customerName, loginUrl, identifier, p
         <li><strong>Mot de passe provisoire :</strong> <code style="font-size:16px;background:#f0f0f0;padding:4px 8px;border-radius:4px;">${safePw}</code></li>
         <li><strong>Code client :</strong> ${safeCode} (pour reference)</li>
       </ul>
-      <p>Nous vous recommandons de vous connecter puis de changer ce mot de passe lorsque cette option sera disponible.</p>
-      <p><a href="${safeUrl}" style="display:inline-block;padding:12px 20px;background:#0f3f71;color:#fff;text-decoration:none;border-radius:8px;">Se connecter au portail</a></p>`
+      <p>La connexion utilise Supabase : gardez ce mot de passe ou modifiez-le depuis votre compte (récupération de mot de passe sur la page de connexion).</p>
+      <p><a href="${safeUrl}" style="display:inline-block;padding:12px 20px;background:#0f3f71;color:#fff;text-decoration:none;border-radius:8px;">Se connecter</a></p>`
     ),
   };
 }

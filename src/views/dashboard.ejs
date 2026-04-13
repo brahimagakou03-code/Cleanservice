@@ -92,13 +92,20 @@
     </div>
 
     <div class="mt-4 d-flex gap-2 flex-wrap">
+      <% if (typeof isPlatformOrg !== "undefined" && isPlatformOrg) { %>
+        <a class="btn btn-outline-primary" href="/dashboard/platform/organizations">Franchisés</a>
+        <a class="btn btn-outline-primary" href="/dashboard/platform/users">Équipe siège</a>
+      <% } else { %>
       <a class="btn btn-outline-primary" href="/dashboard/customers">Clients</a>
       <a class="btn btn-outline-primary" href="/dashboard/catalog">Catalogue</a>
       <a class="btn btn-outline-primary" href="/dashboard/orders">Commandes</a>
       <a class="btn btn-outline-primary" href="/dashboard/invoices">Facturation</a>
-      <a class="btn btn-outline-primary" href="/dashboard/settings/team">Équipe</a>
+      <% if (typeof canTeamManage !== "undefined" && canTeamManage) { %>
+      <a class="btn btn-outline-primary" href="/dashboard/settings/team">Équipe (franchisé)</a>
+      <% } %>
       <% if (user.role === "OWNER" || user.role === "ADMIN") { %>
       <a class="btn btn-outline-primary" href="/dashboard/branding">Apparence (logo / favicon)</a>
+      <% } %>
       <% } %>
       <form method="POST" action="/logout"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn btn-outline-danger">Se déconnecter</button></form>
     </div>

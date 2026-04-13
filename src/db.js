@@ -34,8 +34,9 @@ function andWhere(existingWhere, orgId) {
 prisma.$use(async (params, next) => {
   const context = requestContext.getStore();
   const orgId = context?.organizationId;
+  const skipTenant = context?.skipTenant === true;
 
-  if (!orgId || !params.model || !TENANT_MODELS.has(params.model)) {
+  if (skipTenant || !orgId || !params.model || !TENANT_MODELS.has(params.model)) {
     return next(params);
   }
 
@@ -86,4 +87,14 @@ prisma.$use(async (params, next) => {
   return next(params);
 });
 
-module.exports = { prisma, requestContext };
+/**
+ * Exécute une requête Prisma sans filtre tenant (liste des franchisés, etc.).
+ * À utiliser uniquement depuis des routes protégées « administrateur plateforme ».
+ */
+function withSkipTenant(fn) {
+  const store = requestContext.getStore();
+  if (!store) return fn();
+  return requestContext.run({ ...store, skipTenant: true }, fn);
+}
+
+module.exports = { prisma, requestContext, withSkipTenant };

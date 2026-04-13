@@ -3,6 +3,8 @@ const { prisma } = require("../db");
 const { can, Role } = require("../utils/rbac");
 const { enqueueEmail } = require("../utils/emailQueue");
 const { teamInvitationTemplate } = require("../utils/emailTemplates");
+const { createSupabaseServiceClient } = require("../lib/supabase");
+const { generatePortalPassword } = require("../utils/auth");
 const { orderStatusLabel } = require("../middleware/i18nFr");
 const { canApprove, STATUS: ORDER_STATUS } = require("../utils/orders");
 
@@ -31,8 +33,144 @@ const TODO_NEXT_ACTION_FR = {
 };
 
 const router = express.Router();
+const { withSkipTenant } = require("../db");
+const {
+  getAssignableTenantRoles,
+  getAssignablePlatformRoles,
+  canInviteTenantMembers,
+  actorCanSetTenantRole,
+} = require("../utils/teamRoles");
+
+function requirePlatformAdmin(req, res, next) {
+  if (!req.organization?.isPlatform) {
+    return res.status(403).send("Accès réservé au siège Clean Service.");
+  }
+  if (!can(req.user.role, "platform:read")) {
+    return res.status(403).send("Profil administrateur plateforme requis.");
+  }
+  next();
+}
+
+router.get("/platform", requirePlatformAdmin, (_req, res) => {
+  res.redirect("/dashboard/platform/organizations");
+});
+
+router.get("/platform/organizations", requirePlatformAdmin, async (req, res, next) => {
+  try {
+    const organizations = await withSkipTenant(() =>
+      prisma.organization.findMany({
+        where: { isPlatform: false },
+        orderBy: { name: "asc" },
+        include: { _count: { select: { users: true, customers: true } } },
+      }),
+    );
+    return res.render("platform-organizations", { organizations });
+  } catch (e) {
+    return next(e);
+  }
+});
+
+router.get("/platform/users", requirePlatformAdmin, async (req, res) => {
+  const members = await prisma.user.findMany({ orderBy: { createdAt: "asc" } });
+  return res.render("platform-team", {
+    members,
+    assignableRoles: getAssignablePlatformRoles(),
+    isPlatformContext: true,
+  });
+});
+
+router.post("/platform/users/invite", requirePlatformAdmin, async (req, res) => {
+  const { email, firstName, lastName, role } = req.body;
+  const allowed = getAssignablePlatformRoles();
+  const safeRole = allowed.includes(role) ? role : allowed[0];
+  const emailNorm = String(email || "").trim().toLowerCase();
+  if (!emailNorm) {
+    return res.status(400).send("E-mail obligatoire.");
+  }
+  if (!canInviteTenantMembers(req.user.role)) {
+    return res.status(403).send("Droits insuffisants pour inviter.");
+  }
+
+  const svc = createSupabaseServiceClient();
+  if (!svc) {
+    return res.status(503).send("Supabase (SUPABASE_SERVICE_ROLE_KEY) non configure.");
+  }
+
+  const tempPassword = generatePortalPassword(16);
+  const { data: authData, error: authErr } = await svc.auth.admin.createUser({
+    email: emailNorm,
+    password: tempPassword,
+    email_confirm: true,
+  });
+  if (authErr || !authData?.user?.id) {
+    return res.status(400).send(`Compte Auth : ${authErr?.message || "creation impossible"}`);
+  }
+
+  try {
+    await prisma.user.create({
+      data: {
+        email: emailNorm,
+        firstName: firstName || "Invite",
+        lastName: lastName || "User",
+        role: safeRole,
+        organizationId: req.user.organizationId,
+        authUid: authData.user.id,
+        passwordHash: null,
+      },
+    });
+  } catch (error) {
+    try {
+      await svc.auth.admin.deleteUser(authData.user.id);
+    } catch (_) {
+      /* ignore */
+    }
+    return res.status(400).send(`Invitation impossible: ${error.message}`);
+  }
+
+  const tpl = teamInvitationTemplate({
+    firstName: firstName || "Utilisateur",
+    inviteLink: `${process.env.APP_BASE_URL || "http://localhost:3000"}/login`,
+    tempPassword,
+  });
+  await enqueueEmail({
+    organizationId: req.user.organizationId,
+    toEmail: emailNorm,
+    subject: tpl.subject,
+    html: tpl.html,
+  });
+  return res.redirect("/dashboard/platform/users");
+});
+
+router.post("/platform/users/:id/role", requirePlatformAdmin, async (req, res) => {
+  const { role } = req.body;
+  const allowed = getAssignablePlatformRoles();
+  if (!allowed.includes(role)) {
+    return res.status(400).send("Rôle plateforme invalide.");
+  }
+  const target = await prisma.user.findFirst({ where: { id: req.params.id } });
+  if (!target || target.organizationId !== req.user.organizationId) {
+    return res.status(404).send("Membre introuvable.");
+  }
+  await prisma.user.update({ where: { id: target.id }, data: { role } });
+  return res.redirect("/dashboard/platform/users");
+});
+
+router.post("/platform/users/:id/toggle-active", requirePlatformAdmin, async (req, res) => {
+  const target = await prisma.user.findFirst({ where: { id: req.params.id } });
+  if (!target || target.organizationId !== req.user.organizationId) {
+    return res.status(404).send("Membre introuvable.");
+  }
+  if (target.id === req.user.sub) {
+    return res.status(400).send("Vous ne pouvez pas désactiver votre propre compte depuis cette page.");
+  }
+  await prisma.user.update({ where: { id: target.id }, data: { isActive: !target.isActive } });
+  return res.redirect("/dashboard/platform/users");
+});
 
 router.get("/", async (req, res) => {
+  if (req.organization?.isPlatform) {
+    return res.redirect("/dashboard/platform");
+  }
   const orgId = req.user.organizationId;
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -210,6 +348,9 @@ router.get("/", async (req, res) => {
 
   res.render("dashboard", {
     user: req.user,
+    isPlatformOrg: req.organization?.isPlatform === true,
+    canTeamManage: can(req.user.role, "team:manage"),
+    canPlatform: can(req.user.role, "platform:read"),
     stats: {
       customers,
       kpi: {
@@ -229,69 +370,126 @@ router.get("/", async (req, res) => {
 });
 
 router.get("/settings/team", async (req, res) => {
-  if (!(can(req.user.role, "*") || can(req.user.role, "clients:manage"))) {
-    return res.status(403).send("Acces refuse");
+  if (req.organization?.isPlatform) {
+    return res.redirect("/dashboard/platform/users");
+  }
+  if (!canInviteTenantMembers(req.user.role)) {
+    return res.status(403).send("Accès refusé : droits « équipe » insuffisants.");
   }
   const members = await prisma.user.findMany({ orderBy: { createdAt: "asc" } });
-  return res.render("team-settings", { members, role: req.user.role, roles: Object.values(Role) });
+  return res.render("team-settings", {
+    members,
+    role: req.user.role,
+    assignableRoles: getAssignableTenantRoles(req.user.role),
+  });
 });
 
 router.post("/settings/team/invite", async (req, res) => {
-  if (!(can(req.user.role, "*") || can(req.user.role, "clients:manage"))) {
-    return res.status(403).send("Acces refuse");
+  if (req.organization?.isPlatform) {
+    return res.redirect("/dashboard/platform/users");
+  }
+  if (!canInviteTenantMembers(req.user.role)) {
+    return res.status(403).send("Accès refusé : droits « équipe » insuffisants.");
   }
 
   const { email, firstName, lastName, role } = req.body;
-  const safeRole = Object.values(Role).includes(role) ? role : Role.MEMBER;
-  const placeholderHash = "$2b$12$2TeIcFtXgDCHx9jl0QGv4eCtcbjQ4X.BI9B2En9V5CLYQxyjQw9di";
+  const allowed = getAssignableTenantRoles(req.user.role);
+  const safeRole = allowed.includes(role) ? role : Role.MEMBER;
+  const emailNorm = String(email || "").trim().toLowerCase();
+  if (!emailNorm) {
+    return res.status(400).send("E-mail obligatoire.");
+  }
+
+  const svc = createSupabaseServiceClient();
+  if (!svc) {
+    return res.status(503).send("Supabase (SUPABASE_SERVICE_ROLE_KEY) non configure : invitation impossible.");
+  }
+
+  const tempPassword = generatePortalPassword(16);
+  const { data: authData, error: authErr } = await svc.auth.admin.createUser({
+    email: emailNorm,
+    password: tempPassword,
+    email_confirm: true,
+  });
+  if (authErr || !authData?.user?.id) {
+    return res.status(400).send(`Compte Auth : ${authErr?.message || "creation impossible"}`);
+  }
 
   try {
     await prisma.user.create({
       data: {
-        email,
+        email: emailNorm,
         firstName: firstName || "Invite",
         lastName: lastName || "User",
         role: safeRole,
-        passwordHash: placeholderHash,
+        organizationId: req.user.organizationId,
+        authUid: authData.user.id,
+        passwordHash: null,
       },
     });
-    const tpl = teamInvitationTemplate({
-      firstName: firstName || "Utilisateur",
-      inviteLink: `${process.env.APP_BASE_URL || "http://localhost:3000"}/login`,
-    });
-    await enqueueEmail({
-      organizationId: req.user.organizationId,
-      toEmail: email,
-      subject: tpl.subject,
-      html: tpl.html,
-    });
-    return res.redirect("/dashboard/settings/team");
   } catch (error) {
+    try {
+      await svc.auth.admin.deleteUser(authData.user.id);
+    } catch (_) {
+      /* ignore */
+    }
     return res.status(400).send(`Invitation impossible: ${error.message}`);
   }
+
+  const tpl = teamInvitationTemplate({
+    firstName: firstName || "Utilisateur",
+    inviteLink: `${process.env.APP_BASE_URL || "http://localhost:3000"}/login`,
+    tempPassword,
+  });
+  await enqueueEmail({
+    organizationId: req.user.organizationId,
+    toEmail: emailNorm,
+    subject: tpl.subject,
+    html: tpl.html,
+  });
+  return res.redirect("/dashboard/settings/team");
 });
 
 router.post("/settings/team/:id/role", async (req, res) => {
-  if (!(can(req.user.role, "*") || can(req.user.role, "clients:manage"))) {
-    return res.status(403).send("Acces refuse");
+  if (req.organization?.isPlatform) {
+    return res.redirect("/dashboard/platform/users");
+  }
+  if (!canInviteTenantMembers(req.user.role)) {
+    return res.status(403).send("Accès refusé : droits « équipe » insuffisants.");
   }
 
   const { role } = req.body;
-  if (!Object.values(Role).includes(role)) {
-    return res.status(400).send("Role invalide");
+  const target = await prisma.user.findFirst({ where: { id: req.params.id } });
+  if (!target || target.organizationId !== req.user.organizationId) {
+    return res.status(404).send("Membre introuvable.");
+  }
+  const allowedRoles = getAssignableTenantRoles(req.user.role);
+  if (!allowedRoles.includes(role)) {
+    return res.status(400).send("Rôle invalide.");
+  }
+  if (!actorCanSetTenantRole(req.user.role, role)) {
+    return res.status(400).send("Vous ne pouvez pas attribuer ce rôle.");
   }
 
-  await prisma.user.update({ where: { id: req.params.id }, data: { role } });
+  await prisma.user.update({ where: { id: target.id }, data: { role } });
   return res.redirect("/dashboard/settings/team");
 });
 
 router.post("/settings/team/:id/toggle-active", async (req, res) => {
-  if (!(can(req.user.role, "*") || can(req.user.role, "clients:manage"))) {
-    return res.status(403).send("Acces refuse");
+  if (req.organization?.isPlatform) {
+    return res.redirect("/dashboard/platform/users");
+  }
+  if (!canInviteTenantMembers(req.user.role)) {
+    return res.status(403).send("Accès refusé : droits « équipe » insuffisants.");
   }
 
-  const target = await prisma.user.findUnique({ where: { id: req.params.id } });
-  if (!target) return res.status(404).send("Membre introuvable");
+  const target = await prisma.user.findFirst({ where: { id: req.params.id } });
+  if (!target || target.organizationId !== req.user.organizationId) {
+    return res.status(404).send("Membre introuvable");
+  }
+  if (target.id === req.user.sub) {
+    return res.status(400).send("Vous ne pouvez pas désactiver votre propre compte depuis cette page.");
+  }
   await prisma.user.update({ where: { id: target.id }, data: { isActive: !target.isActive } });
   return res.redirect("/dashboard/settings/team");
 });

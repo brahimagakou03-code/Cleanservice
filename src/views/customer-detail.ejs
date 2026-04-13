@@ -152,7 +152,7 @@
             <% } %>
           </p>
           <div class="d-flex flex-wrap gap-2 align-items-center">
-            <a class="btn btn-outline-primary" href="/portal/login" target="_blank" rel="noopener noreferrer">Ouvrir la page de connexion portail</a>
+            <a class="btn btn-outline-primary" href="/login?from=portal" target="_blank" rel="noopener noreferrer">Ouvrir la page de connexion portail</a>
             <form method="POST" action="/dashboard/customers/<%= customer.id %>/portal-test-credentials" class="d-inline">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
               <button class="btn btn-primary" type="submit" <% if (!customer.email) { %>disabled title="Renseignez l'e-mail du client ci-dessus et enregistrez"<% } %>>Générer un mot de passe (affiché une fois ici)</button>

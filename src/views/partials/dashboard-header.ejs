@@ -10,10 +10,11 @@
   const recentNotifications = notifications.recent || [];
   const currentPath = safeLayout.currentPath || "";
   const brandLogoUrl = safeLayout.brandLogoUrl || "/branding/logo.png";
+  const isPlatformOrg = safeLayout.isPlatformOrg === true;
 %>
 <nav class="navbar navbar-expand-lg cs-navbar mb-4">
   <div class="container">
-    <a class="navbar-brand d-flex align-items-center gap-3" href="/dashboard">
+    <a class="navbar-brand d-flex align-items-center gap-3" href="<%= isPlatformOrg ? '/dashboard/platform' : '/dashboard' %>">
       <img src="<%= brandLogoUrl %>" alt="Clean Service" class="cs-logo" />
     </a>
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav">
@@ -21,6 +22,11 @@
     </button>
     <div class="collapse navbar-collapse" id="mainNav">
       <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+        <% if (isPlatformOrg) { %>
+        <li class="nav-item"><a class="nav-link cs-link <%= currentPath.startsWith('/dashboard/platform/organizations') ? 'active' : '' %>" href="/dashboard/platform/organizations">Franchisés</a></li>
+        <li class="nav-item"><a class="nav-link cs-link <%= currentPath.startsWith('/dashboard/platform/users') ? 'active' : '' %>" href="/dashboard/platform/users">Équipe siège</a></li>
+        <li class="nav-item"><a class="nav-link cs-link <%= currentPath === '/dashboard' ? 'active' : '' %>" href="/dashboard">Synthèse siège</a></li>
+        <% } else { %>
         <li class="nav-item"><a class="nav-link cs-link <%= currentPath === '/dashboard' ? 'active' : '' %>" href="/dashboard">Tableau de bord</a></li>
         <li class="nav-item"><a class="nav-link cs-link <%= currentPath.startsWith('/dashboard/customers') ? 'active' : '' %>" href="/dashboard/customers">Clients</a></li>
         <li class="nav-item"><a class="nav-link cs-link <%= currentPath.startsWith('/dashboard/catalog') ? 'active' : '' %>" href="/dashboard/catalog">Catalogue</a></li>
@@ -29,6 +35,7 @@
         <li class="nav-item"><a class="nav-link cs-link <%= currentPath.startsWith('/dashboard/guide') ? 'active' : '' %>" href="/dashboard/guide">Guide</a></li>
         <% if (currentUser.role === "OWNER" || currentUser.role === "ADMIN") { %>
         <li class="nav-item"><a class="nav-link cs-link <%= currentPath.startsWith('/dashboard/branding') ? 'active' : '' %>" href="/dashboard/branding">Apparence</a></li>
+        <% } %>
         <% } %>
       </ul>
       <div class="d-flex align-items-center flex-wrap gap-2 ms-lg-auto mt-3 mt-lg-0">

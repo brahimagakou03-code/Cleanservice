@@ -8,6 +8,7 @@ const { customerSchema, PAYMENT_TERMS } = require("../utils/customerValidation")
 const { enqueueEmail } = require("../utils/emailQueue");
 const { clientPortalCredentialsTemplate } = require("../utils/emailTemplates");
 const { hashPassword, generatePortalPassword } = require("../utils/auth");
+const { ensureCustomerSupabaseAuthUser } = require("../utils/supabaseAuth");
 const { ensureImportCsvFile } = require("../middleware/earlyMultipartBeforeCsrf");
 
 const router = express.Router();
@@ -216,10 +217,15 @@ router.post("/", async (req, res) => {
     },
   });
 
+  const sup = await ensureCustomerSupabaseAuthUser(emailNorm, plainPortalPassword);
+  if (sup.ok) {
+    await prisma.customer.update({ where: { id: customer.id }, data: { authUid: sup.authUid } });
+  }
+
   const baseUrl = process.env.APP_BASE_URL || "http://localhost:3000";
   const tpl = clientPortalCredentialsTemplate({
     customerName: customer.companyName,
-    loginUrl: `${baseUrl}/portal/login`,
+    loginUrl: `${baseUrl}/login`,
     identifier: emailNorm,
     plainPassword: plainPortalPassword,
     code: customer.code,
@@ -403,9 +409,13 @@ router.post("/:id/portal-test-credentials", async (req, res, next) => {
 
   const plainPortalPassword = generatePortalPassword();
   const portalPasswordHash = await hashPassword(plainPortalPassword);
+  const sup = await ensureCustomerSupabaseAuthUser(emailNorm, plainPortalPassword);
   await prisma.customer.update({
     where: { id: customer.id },
-    data: { portalPasswordHash },
+    data: {
+      portalPasswordHash,
+      ...(sup.ok ? { authUid: sup.authUid } : {}),
+    },
   });
 
   const key = crypto.randomUUID();
@@ -429,15 +439,16 @@ router.post("/:id/invite-portal", async (req, res) => {
 
   const plainPortalPassword = generatePortalPassword();
   const portalPasswordHash = await hashPassword(plainPortalPassword);
+  const sup = await ensureCustomerSupabaseAuthUser(emailNorm, plainPortalPassword);
   await prisma.customer.update({
     where: { id: customer.id },
-    data: { email: emailNorm, portalPasswordHash },
+    data: { email: emailNorm, portalPasswordHash, ...(sup.ok ? { authUid: sup.authUid } : {}) },
   });
 
   const baseUrl = process.env.APP_BASE_URL || "http://localhost:3000";
   const tpl = clientPortalCredentialsTemplate({
     customerName: customer.companyName,
-    loginUrl: `${baseUrl}/portal/login`,
+    loginUrl: `${baseUrl}/login`,
     identifier: emailNorm,
     plainPassword: plainPortalPassword,
     code: customer.code,

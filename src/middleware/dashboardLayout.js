@@ -22,6 +22,7 @@ async function loadDashboardLayout(req, res, next) {
     res.locals.layout = {
       currentPath: normalizeRequestPath(req),
       user: req.user,
+      isPlatformOrg: req.organization?.isPlatform === true,
       notifications: { unread, recent },
       brandLogoUrl: res.locals.platformLogoUrl || "/branding/logo.png",
     };
@@ -32,6 +33,7 @@ async function loadDashboardLayout(req, res, next) {
     res.locals.layout = {
       currentPath: normalizeRequestPath(req),
       user: req.user,
+      isPlatformOrg: req.organization?.isPlatform === true,
       notifications: { unread: 0, recent: [] },
       brandLogoUrl: res.locals.platformLogoUrl || "/branding/logo.png",
     };

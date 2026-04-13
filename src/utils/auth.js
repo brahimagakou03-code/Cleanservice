@@ -12,6 +12,7 @@ function hashPassword(password) {
 }
 
 function comparePassword(password, hash) {
+  if (hash == null || hash === "") return false;
   return bcrypt.compare(password, hash);
 }
 

@@ -1,16 +1,11 @@
 const express = require("express");
-const { Prisma } = require("@prisma/client");
+const rateLimit = require("express-rate-limit");
 const { prisma } = require("../db");
 const { getPriceForCustomer } = require("../utils/pricing");
 const { computeOrderTotals, STATUS, nextOrderNumber } = require("../utils/orders");
-const {
-  CLIENT_PORTAL_COOKIE,
-  signClientPortalToken,
-  setClientPortalCookie,
-  clearClientPortalCookie,
-  verifyClientPortalToken,
-  comparePassword,
-} = require("../utils/auth");
+const { clearClientPortalCookie } = require("../utils/auth");
+const { createSupabaseRouteClient } = require("../utils/supabaseExpress");
+const { performUnifiedLogin } = require("../services/unifiedLogin");
 const { requireClientPortalAuth } = require("../middleware/portalAuth");
 const { attachPortalNotifications } = require("../middleware/portalNotifications");
 const { TYPE, notifyUsersByRoles } = require("../utils/notifications");
@@ -18,6 +13,14 @@ const { assertPortalCartStockAvailable } = require("../utils/orderStock");
 const { mergeFormBody } = require("../utils/mergeFormBody");
 
 const router = express.Router();
+
+const portalLoginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: "Trop de tentatives de connexion. Reessayez dans 15 minutes.",
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 /** Pages portail avec en-tête : alertes chargées pour la cloche et le bloc « Vos alertes ». */
 const portalAuthed = [requireClientPortalAuth, attachPortalNotifications];
@@ -95,91 +98,38 @@ function stripHtmlShort(html, maxLen) {
   return `${t.slice(0, maxLen).trimEnd()}…`;
 }
 
-router.get("/login", (req, res) => {
-  const token = req.cookies[CLIENT_PORTAL_COOKIE];
-  if (token) {
-    try {
-      verifyClientPortalToken(token);
-      return res.redirect("/portal");
-    } catch (_) {
-      /* jeton expiré */
-    }
-  }
-  return res.render("portal-login", { loginError: null });
-});
+router.get("/login", (_req, res) => res.redirect(302, "/login?from=portal"));
 
-function codesMatch(input, stored) {
-  const a = String(input || "")
-    .trim()
-    .toUpperCase();
-  const b = String(stored || "")
-    .trim()
-    .toUpperCase();
-  return a.length > 0 && a === b;
-}
-
-async function portalCredentialsValid(customer, password, code) {
-  const pwd = String(password || "").trim();
-  const codeOk = codesMatch(code, customer.code);
-  if (customer.portalPasswordHash) {
-    const pwdOk = pwd.length > 0 && (await comparePassword(pwd, customer.portalPasswordHash));
-    /* Mot de passe OU code client (ex. test sans copier le MDP reçu par e-mail) */
-    return pwdOk || codeOk;
-  }
-  return codeOk;
-}
-
-router.post("/login", async (req, res) => {
+router.post("/login", portalLoginLimiter, async (req, res) => {
   const body = mergeFormBody(req);
   const email = String(body.email || "").trim().toLowerCase();
   const password = String(body.password || "");
   const code = String(body.code || "");
-  if (!email) {
-    return res.status(400).render("portal-login", { loginError: "L’adresse e-mail est obligatoire." });
+  if (!email || (!password && !code)) {
+    return res.redirect(302, "/login?from=portal&err=champs");
   }
-
-  // SQLite : comparaison insensible à la casse (les fiches peuvent avoir été créées avec une casse différente)
-  const emailHits = await prisma.$queryRaw(
-    Prisma.sql`SELECT id, isActive FROM Customer WHERE LOWER(TRIM(COALESCE(email, ''))) = ${email} LIMIT 1`,
-  );
-  const hit = emailHits[0];
-  if (!hit) {
-    return res.status(401).render("portal-login", {
-      loginError:
-        "Aucun compte pour cet e-mail. Vérifiez l’orthographe (identifiant = e-mail enregistré chez votre fournisseur).",
-    });
+  const result = await performUnifiedLogin(req, res, { email, password, code });
+  if (!result.ok) {
+    const q = new URLSearchParams({ from: "portal" });
+    if (result.reason === "champs") q.set("err", "champs");
+    else if (result.reason === "provision") q.set("err", "provision");
+    else if (result.reason === "code_court") q.set("err", "code_court");
+    else if (result.reason === "noprofile") q.set("err", "noprofile");
+    else q.set("err", "auth");
+    return res.redirect(302, `/login?${q.toString()}`);
   }
-  if (!hit.isActive) {
-    return res.status(401).render("portal-login", {
-      loginError: "Ce compte est désactivé. Contactez votre fournisseur.",
-    });
-  }
-
-  const customer = await prisma.customer.findUnique({ where: { id: hit.id } });
-  if (!customer) {
-    return res.status(401).render("portal-login", {
-      loginError: "Compte introuvable. Contactez votre fournisseur.",
-    });
-  }
-
-  const ok = await portalCredentialsValid(customer, password, code);
-  if (!ok) {
-    const hint = customer.portalPasswordHash
-      ? "Indiquez le mot de passe reçu par e-mail, ou votre code client (ex. CLI-0001) à la place du mot de passe."
-      : "Indiquez votre code client (ex. CLI-0001) en laissant le mot de passe vide.";
-    return res.status(401).render("portal-login", {
-      loginError: `Connexion refusée. ${hint}`,
-    });
-  }
-
-  const token = signClientPortalToken(customer);
-  setClientPortalCookie(res, token);
-  return res.redirect("/portal");
+  return res.redirect(302, result.redirect);
 });
 
-router.post("/logout", (_req, res) => {
+router.post("/logout", async (req, res) => {
+  try {
+    const supabase = createSupabaseRouteClient(req, res);
+    await supabase.auth.signOut();
+  } catch (_) {
+    /* ignore */
+  }
   clearClientPortalCookie(res);
-  return res.redirect("/portal/login");
+  return res.redirect("/login");
 });
 
 router.get("/api/catalog-revision", requireClientPortalAuth, async (req, res) => {
