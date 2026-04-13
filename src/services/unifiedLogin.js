@@ -38,6 +38,12 @@ function effectivePasswordForSupabase(password, code, customer) {
   return "";
 }
 
+function isPrismaDbUnreachable(err) {
+  const code = err?.code;
+  const msg = String(err?.message || "");
+  return code === "P1001" || msg.includes("Can't reach database server") || msg.includes("P1001");
+}
+
 /**
  * Connexion unique (Supabase Auth) : e-mail + mot de passe ; code client optionnel (héritage).
  * @returns {{ ok: true, redirect: string } | { ok: false, reason: string }}
@@ -51,6 +57,17 @@ async function performUnifiedLogin(req, res, { email, password, code }) {
     return { ok: false, reason: "champs" };
   }
 
+  try {
+    return await performUnifiedLoginInner(req, res, { email: em, password: pwd, code: cod });
+  } catch (e) {
+    if (isPrismaDbUnreachable(e)) {
+      return { ok: false, reason: "db", message: e.message };
+    }
+    throw e;
+  }
+}
+
+async function performUnifiedLoginInner(req, res, { email: em, password: pwd, code: cod }) {
   let supabase;
   try {
     supabase = createSupabaseRouteClient(req, res);
