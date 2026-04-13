@@ -147,7 +147,7 @@ router.get("/login", async (req, res) => {
       "Identifiants portail trop courts (minimum 6 caractères côté Supabase). Utilisez le mot de passe reçu par e-mail.";
   } else if (err === "db") {
     loginAlert =
-      "La base de données est injoignable depuis l’hébergeur. Sur Netlify : vérifiez DATABASE_URL (mot de passe correct, caractères spéciaux encodés en URL). Pour Supabase + fonctions serverless, utilisez souvent la chaîne « Transaction pooler » (port 6543) avec le paramètre pgbouncer, pas seulement l’hôte db.…:5432. Dans Supabase : réveillez le projet s’il est en pause, et Project Settings → Database.";
+      "La base de données ne répond pas depuis Netlify. À faire : (1) Supabase → réveillez le projet s’il est en pause. (2) Netlify → Environment variables → DATABASE_URL : copiez l’URI « Transaction pooler » (port 6543) depuis Supabase → Connect → Connection strings (pas l’hôte db…:5432 seul). (3) Mot de passe avec @ # etc. : encodez-le dans l’URL (%40, %23…). (4) Redéployez le site après modification.";
   }
   return res.render("login", { loginAlert, fromPortal: from === "portal" });
 });

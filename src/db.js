@@ -1,7 +1,45 @@
 const { AsyncLocalStorage } = require("node:async_hooks");
 const { PrismaClient } = require("@prisma/client");
 
-const prisma = new PrismaClient();
+/**
+ * Netlify / Supabase : sans sslmode=require, pg peut échouer (P1001 « Can't reach database »).
+ * Pooler (6543) : ajoute pgbouncer=true si absent (requis par Prisma avec PgBouncer transaction).
+ */
+function normalizeDatabaseUrl(raw) {
+  if (!raw || typeof raw !== "string") return raw;
+  let u = raw.trim();
+  if (!u.includes("supabase.co")) return u;
+
+  if (!/[?&]sslmode=/i.test(u)) {
+    u += u.includes("?") ? "&sslmode=require" : "?sslmode=require";
+  }
+
+  const isPooler = /:6543([/?]|$)/.test(u) || u.includes("pooler.supabase.com");
+  if (isPooler && !/[?&]pgbouncer=/i.test(u)) {
+    u += u.includes("?") ? "&pgbouncer=true" : "?pgbouncer=true";
+  }
+
+  if (process.env.NETLIFY === "true" && isPooler && !/[?&]connection_limit=/i.test(u)) {
+    u += u.includes("?") ? "&connection_limit=1" : "?connection_limit=1";
+  }
+
+  return u;
+}
+
+const resolvedDbUrl = normalizeDatabaseUrl(process.env.DATABASE_URL);
+
+if (process.env.NETLIFY === "true" && process.env.DATABASE_URL) {
+  const d = process.env.DATABASE_URL;
+  if (/db\.[^.]+\.supabase\.co:5432/.test(d) && !/:6543/.test(d)) {
+    console.warn(
+      "[db] Netlify : DATABASE_URL utilise la connexion directe (db…:5432). Préférez l’URI « Transaction pooler » (port 6543) depuis Supabase → Connect → Connection string."
+    );
+  }
+}
+
+const prisma = resolvedDbUrl
+  ? new PrismaClient({ datasources: { db: { url: resolvedDbUrl } } })
+  : new PrismaClient();
 const requestContext = new AsyncLocalStorage();
 const TENANT_MODELS = new Set([
   "User",
