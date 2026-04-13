@@ -55,4 +55,10 @@ function createSupabaseRouteClient(req, res) {
   });
 }
 
-module.exports = { createSupabaseRouteClient };
+function isSupabaseAuthConfigured() {
+  const url = String(process.env.SUPABASE_URL || "").trim();
+  const anon = String(process.env.SUPABASE_ANON_KEY || "").trim();
+  return Boolean(url && anon);
+}
+
+module.exports = { createSupabaseRouteClient, isSupabaseAuthConfigured };

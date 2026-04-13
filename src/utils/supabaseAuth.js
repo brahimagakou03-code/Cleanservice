@@ -1,9 +1,15 @@
 const { prisma } = require("../db");
 const { createSupabaseServiceClient } = require("../lib/supabase");
 
+/** Filtre Prisma insensible à la casse (PostgreSQL). */
+function emailMatchesInsensitive(emailLower) {
+  return { equals: emailLower, mode: "insensitive" };
+}
+
 /**
  * Rattache la session Supabase à un membre d’équipe ou à un client portail (priorité équipe).
  * Met à jour authUid si l’utilisateur Auth correspond à l’e-mail métier sans lien encore.
+ * Resynchronise authUid si l’e-mail correspond mais l’UUID Auth a changé (recréation côté Supabase).
  */
 async function resolveAppIdentity(supabaseUser) {
   if (!supabaseUser?.id || !supabaseUser.email) return null;
@@ -16,7 +22,7 @@ async function resolveAppIdentity(supabaseUser) {
   if (staffByUid) return { kind: "staff", user: staffByUid };
 
   const staffByEmail = await prisma.user.findFirst({
-    where: { isActive: true, email, authUid: null },
+    where: { isActive: true, email: emailMatchesInsensitive(email), authUid: null },
     include: { organization: true },
   });
   if (staffByEmail) {
@@ -24,11 +30,16 @@ async function resolveAppIdentity(supabaseUser) {
     return { kind: "staff", user: { ...staffByEmail, authUid: supabaseUser.id } };
   }
 
-  const staffWrongLink = await prisma.user.findFirst({
-    where: { isActive: true, email, authUid: { not: null } },
+  const staffStaleAuth = await prisma.user.findFirst({
+    where: { isActive: true, email: emailMatchesInsensitive(email), authUid: { not: null } },
+    include: { organization: true },
   });
-  if (staffWrongLink && staffWrongLink.authUid !== supabaseUser.id) {
-    return null;
+  if (staffStaleAuth && staffStaleAuth.authUid !== supabaseUser.id) {
+    await prisma.user.update({
+      where: { id: staffStaleAuth.id },
+      data: { authUid: supabaseUser.id },
+    });
+    return { kind: "staff", user: { ...staffStaleAuth, authUid: supabaseUser.id } };
   }
 
   const custByUid = await prisma.customer.findFirst({
@@ -37,18 +48,22 @@ async function resolveAppIdentity(supabaseUser) {
   if (custByUid) return { kind: "portal", customer: custByUid };
 
   const custByEmail = await prisma.customer.findFirst({
-    where: { isActive: true, email, authUid: null },
+    where: { isActive: true, email: emailMatchesInsensitive(email), authUid: null },
   });
   if (custByEmail) {
     await prisma.customer.update({ where: { id: custByEmail.id }, data: { authUid: supabaseUser.id } });
     return { kind: "portal", customer: { ...custByEmail, authUid: supabaseUser.id } };
   }
 
-  const custWrongLink = await prisma.customer.findFirst({
-    where: { isActive: true, email, authUid: { not: null } },
+  const custStaleAuth = await prisma.customer.findFirst({
+    where: { isActive: true, email: emailMatchesInsensitive(email), authUid: { not: null } },
   });
-  if (custWrongLink && custWrongLink.authUid !== supabaseUser.id) {
-    return null;
+  if (custStaleAuth && custStaleAuth.authUid !== supabaseUser.id) {
+    await prisma.customer.update({
+      where: { id: custStaleAuth.id },
+      data: { authUid: supabaseUser.id },
+    });
+    return { kind: "portal", customer: { ...custStaleAuth, authUid: supabaseUser.id } };
   }
 
   return null;
@@ -57,6 +72,54 @@ async function resolveAppIdentity(supabaseUser) {
 function isAlreadyRegisteredError(err) {
   const m = String(err?.message || err || "").toLowerCase();
   return m.includes("already") || m.includes("registered") || m.includes("exists");
+}
+
+function getAppBaseUrl() {
+  return String(process.env.APP_BASE_URL || "http://localhost:3000").replace(/\/$/, "");
+}
+
+async function findAuthUserByEmail(svc, emailNorm) {
+  let page = 1;
+  const perPage = 200;
+  for (let i = 0; i < 10; i += 1) {
+    const { data: pageData, error: listErr } = await svc.auth.admin.listUsers({ page, perPage });
+    if (listErr) return null;
+    const users = pageData?.users || [];
+    const found = users.find((u) => String(u.email || "").toLowerCase() === emailNorm);
+    if (found?.id) return found;
+    if (!users.length || users.length < perPage) break;
+    page += 1;
+  }
+  return null;
+}
+
+/**
+ * Envoie l’e-mail d’invitation Supabase (lien pour définir le mot de passe).
+ * Si l’utilisateur Auth existe déjà, renvoie son UUID sans renvoyer d’invitation.
+ */
+async function inviteStaffSupabaseUser(email, options = {}) {
+  const svc = createSupabaseServiceClient();
+  if (!svc) return { ok: false, error: "SUPABASE_SERVICE_ROLE_KEY manquant." };
+
+  const base = getAppBaseUrl();
+  const path = options.redirectPath || "/login";
+  const redirectTo = `${base}${path.startsWith("/") ? path : `/${path}`}`;
+  const emailNorm = String(email).trim().toLowerCase();
+
+  const { data, error } = await svc.auth.admin.inviteUserByEmail(emailNorm, { redirectTo });
+
+  if (!error && data?.user?.id) {
+    return { ok: true, authUid: data.user.id, sentInviteEmail: true, alreadyExisted: false };
+  }
+
+  if (error && isAlreadyRegisteredError(error)) {
+    const found = await findAuthUserByEmail(svc, emailNorm);
+    if (found?.id) {
+      return { ok: true, authUid: found.id, sentInviteEmail: false, alreadyExisted: true };
+    }
+  }
+
+  return { ok: false, error: error?.message || "Invitation Auth impossible." };
 }
 
 /**
@@ -110,4 +173,6 @@ module.exports = {
   ensureCustomerSupabaseAuthUser,
   ensureStaffSupabaseAuthUser,
   isAlreadyRegisteredError,
+  inviteStaffSupabaseUser,
+  getAppBaseUrl,
 };

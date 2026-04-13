@@ -24,7 +24,7 @@ async function processEmailQueue(batchSize = 20) {
   for (const item of pending) {
     try {
       await transporter.sendMail({
-        from: process.env.MAIL_FROM || "no-reply@example.local",
+        from: process.env.MAIL_FROM || "noreply@clean-service.store",
         to: item.toEmail,
         subject: item.subject,
         html: item.html,

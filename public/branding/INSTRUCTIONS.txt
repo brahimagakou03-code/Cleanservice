@@ -1,0 +1,18 @@
+Dépôt du logo (PNG) — Clean Service
+====================================
+
+1. Copiez votre image dans CE dossier : public/branding/
+
+2. Nom du fichier obligatoire pour l’affichage par défaut :
+   logo.png
+
+   Les pages de connexion et le bandeau utilisent l’URL :
+   /branding/logo.png
+
+3. Après ajout ou remplacement, en local : redémarrez le serveur si besoin.
+   Sur Netlify : poussez le fichier dans Git (logo.png) puis déployez.
+
+4. Favicon (optionnel) : vous pouvez aussi déposer favicon.ico ici, ou utiliser
+   le menu « Apparence » du tableau de bord pour l’envoyer.
+
+Astuce : gardez un PNG avec fond transparent ou adapté à votre charte.

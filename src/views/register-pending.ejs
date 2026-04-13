@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="fr">
+  <head><meta charset="UTF-8"><title>Confirmez votre e-mail</title><%- include("partials/favicon") %><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"><link href="/public/styles/app.css" rel="stylesheet"></head>
+  <body class="bg-light">
+    <%- include("partials/auth-header", { mode: "staff" }) %>
+    <div class="container py-4" style="max-width:640px;">
+    <div class="text-center mb-4"><img src="<%= typeof platformLogoUrl !== 'undefined' ? platformLogoUrl : '/branding/logo.png' %>" class="cs-logo-hero" alt="Clean Service"></div>
+    <div class="card p-4 shadow-sm">
+      <h1 class="h4 mb-3">Vérifiez votre boîte mail</h1>
+      <p class="mb-2">Un e-mail d’invitation a été envoyé à <strong><%= email %></strong> (vérifiez aussi les courriers indésirables).</p>
+      <p class="mb-3">Ouvrez ce message et suivez le lien pour <strong>définir votre mot de passe</strong>, puis connectez-vous sur la page de connexion.</p>
+      <a class="btn btn-primary" href="/login">Aller à la connexion</a>
+    </div>
+    <p class="mt-3 small text-muted">Si vous ne recevez rien, vérifiez la configuration SMTP / e-mails dans le tableau de bord Supabase (Auth).</p>
+    </div>
+  </body>
+</html>

@@ -16,16 +16,40 @@ function wrapHtml(title, body) {
   </div>`;
 }
 
-function teamInvitationTemplate({ firstName, inviteLink, tempPassword }) {
-  const pwBlock =
-    tempPassword != null && String(tempPassword).length > 0
-      ? `<p><strong>Mot de passe provisoire :</strong> ${escHtml(tempPassword)}</p><p>Connectez-vous sur la page unique de connexion puis changez votre mot de passe dans Supabase (compte) si besoin.</p>`
-      : "";
+function teamInvitationTemplate({ firstName, inviteLink, supabaseInviteSent, existingSupabaseAccount }) {
+  const safeFirst = escHtml(firstName || "");
+  const safeLink = escHtml(inviteLink);
+
+  if (existingSupabaseAccount) {
+    return {
+      subject: "Invitation equipe Clean Service",
+      html: wrapHtml(
+        "Invitation equipe",
+        `<p>Bonjour ${safeFirst},</p>
+        <p>Vous avez ete ajoute(e) a l'equipe. Un compte existe deja pour cette adresse e-mail.</p>
+        <p><a href="${safeLink}">Ouvrir la page de connexion</a> — si besoin, utilisez la fonction « Mot de passe oublie » pour en definir un nouveau.</p>`
+      ),
+    };
+  }
+
+  if (supabaseInviteSent) {
+    return {
+      subject: "Invitation equipe Clean Service",
+      html: wrapHtml(
+        "Invitation equipe",
+        `<p>Bonjour ${safeFirst},</p>
+        <p>Vous avez ete invite(e) a rejoindre l'equipe sur Clean Service.</p>
+        <p><strong>Ouvrez l'e-mail d'invitation</strong> envoye par le systeme d'authentification (lien pour definir votre mot de passe), puis connectez-vous ici : <a href="${safeLink}">${safeLink}</a></p>
+        <p>Ce message est un rappel complementaire ; le lien principal se trouve dans l'autre message.</p>`
+      ),
+    };
+  }
+
   return {
-    subject: "Invitation equipe",
+    subject: "Invitation equipe Clean Service",
     html: wrapHtml(
       "Invitation equipe",
-      `<p>Bonjour ${escHtml(firstName || "")}, vous etes invite(e) a rejoindre l'equipe.</p>${pwBlock}<p><a href="${escHtml(inviteLink)}">Se connecter</a></p>`
+      `<p>Bonjour ${safeFirst}, vous etes invite(e) a rejoindre l'equipe.</p><p><a href="${safeLink}">Se connecter</a></p>`
     ),
   };
 }

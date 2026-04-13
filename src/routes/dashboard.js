@@ -4,7 +4,7 @@ const { can, Role } = require("../utils/rbac");
 const { enqueueEmail } = require("../utils/emailQueue");
 const { teamInvitationTemplate } = require("../utils/emailTemplates");
 const { createSupabaseServiceClient } = require("../lib/supabase");
-const { generatePortalPassword } = require("../utils/auth");
+const { inviteStaffSupabaseUser, getAppBaseUrl } = require("../utils/supabaseAuth");
 const { orderStatusLabel } = require("../middleware/i18nFr");
 const { canApprove, STATUS: ORDER_STATUS } = require("../utils/orders");
 
@@ -96,14 +96,9 @@ router.post("/platform/users/invite", requirePlatformAdmin, async (req, res) => 
     return res.status(503).send("Supabase (SUPABASE_SERVICE_ROLE_KEY) non configure.");
   }
 
-  const tempPassword = generatePortalPassword(16);
-  const { data: authData, error: authErr } = await svc.auth.admin.createUser({
-    email: emailNorm,
-    password: tempPassword,
-    email_confirm: true,
-  });
-  if (authErr || !authData?.user?.id) {
-    return res.status(400).send(`Compte Auth : ${authErr?.message || "creation impossible"}`);
+  const invite = await inviteStaffSupabaseUser(emailNorm, { redirectPath: "/login" });
+  if (!invite.ok) {
+    return res.status(400).send(`Compte Auth : ${invite.error}`);
   }
 
   try {
@@ -114,23 +109,27 @@ router.post("/platform/users/invite", requirePlatformAdmin, async (req, res) => 
         lastName: lastName || "User",
         role: safeRole,
         organizationId: req.user.organizationId,
-        authUid: authData.user.id,
+        authUid: invite.authUid,
         passwordHash: null,
       },
     });
   } catch (error) {
-    try {
-      await svc.auth.admin.deleteUser(authData.user.id);
-    } catch (_) {
-      /* ignore */
+    if (!invite.alreadyExisted) {
+      try {
+        await svc.auth.admin.deleteUser(invite.authUid);
+      } catch (_) {
+        /* ignore */
+      }
     }
     return res.status(400).send(`Invitation impossible: ${error.message}`);
   }
 
+  const base = getAppBaseUrl();
   const tpl = teamInvitationTemplate({
     firstName: firstName || "Utilisateur",
-    inviteLink: `${process.env.APP_BASE_URL || "http://localhost:3000"}/login`,
-    tempPassword,
+    inviteLink: `${base}/login`,
+    supabaseInviteSent: invite.sentInviteEmail,
+    existingSupabaseAccount: invite.alreadyExisted,
   });
   await enqueueEmail({
     organizationId: req.user.organizationId,
@@ -405,14 +404,9 @@ router.post("/settings/team/invite", async (req, res) => {
     return res.status(503).send("Supabase (SUPABASE_SERVICE_ROLE_KEY) non configure : invitation impossible.");
   }
 
-  const tempPassword = generatePortalPassword(16);
-  const { data: authData, error: authErr } = await svc.auth.admin.createUser({
-    email: emailNorm,
-    password: tempPassword,
-    email_confirm: true,
-  });
-  if (authErr || !authData?.user?.id) {
-    return res.status(400).send(`Compte Auth : ${authErr?.message || "creation impossible"}`);
+  const invite = await inviteStaffSupabaseUser(emailNorm, { redirectPath: "/login" });
+  if (!invite.ok) {
+    return res.status(400).send(`Compte Auth : ${invite.error}`);
   }
 
   try {
@@ -423,23 +417,27 @@ router.post("/settings/team/invite", async (req, res) => {
         lastName: lastName || "User",
         role: safeRole,
         organizationId: req.user.organizationId,
-        authUid: authData.user.id,
+        authUid: invite.authUid,
         passwordHash: null,
       },
     });
   } catch (error) {
-    try {
-      await svc.auth.admin.deleteUser(authData.user.id);
-    } catch (_) {
-      /* ignore */
+    if (!invite.alreadyExisted) {
+      try {
+        await svc.auth.admin.deleteUser(invite.authUid);
+      } catch (_) {
+        /* ignore */
+      }
     }
     return res.status(400).send(`Invitation impossible: ${error.message}`);
   }
 
+  const base = getAppBaseUrl();
   const tpl = teamInvitationTemplate({
     firstName: firstName || "Utilisateur",
-    inviteLink: `${process.env.APP_BASE_URL || "http://localhost:3000"}/login`,
-    tempPassword,
+    inviteLink: `${base}/login`,
+    supabaseInviteSent: invite.sentInviteEmail,
+    existingSupabaseAccount: invite.alreadyExisted,
   });
   await enqueueEmail({
     organizationId: req.user.organizationId,

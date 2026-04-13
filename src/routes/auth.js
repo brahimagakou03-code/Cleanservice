@@ -4,14 +4,15 @@ const { prisma } = require("../db");
 const { clearAuthCookies, clearClientPortalCookie } = require("../utils/auth");
 const { Role } = require("../utils/rbac");
 const { mergeFormBody } = require("../utils/mergeFormBody");
-const { createSupabaseRouteClient } = require("../utils/supabaseExpress");
+const { createSupabaseRouteClient, isSupabaseAuthConfigured } = require("../utils/supabaseExpress");
 const { createSupabaseServiceClient } = require("../lib/supabase");
-const { resolveAppIdentity } = require("../utils/supabaseAuth");
+const { resolveAppIdentity, inviteStaffSupabaseUser } = require("../utils/supabaseAuth");
 const { performUnifiedLogin } = require("../services/unifiedLogin");
 
 const router = express.Router();
 
 async function redirectIfAlreadyAuthenticated(req, res) {
+  if (!isSupabaseAuthConfigured()) return false;
   try {
     const supabase = createSupabaseRouteClient(req, res);
     const { data, error } = await supabase.auth.getUser();
@@ -54,8 +55,8 @@ router.get("/register", async (req, res) => {
 
 router.post("/register", async (req, res) => {
   const body = mergeFormBody(req);
-  const { orgName, slug, siret, address, phone, orgEmail, logo, email, password, firstName, lastName } = body;
-  if (!orgName || !slug || !siret || !address || !phone || !orgEmail || !email || !password || !firstName || !lastName) {
+  const { orgName, slug, siret, address, phone, orgEmail, logo, email, firstName, lastName } = body;
+  if (!orgName || !slug || !siret || !address || !phone || !orgEmail || !email || !firstName || !lastName) {
     return res.status(400).send("Tous les champs obligatoires doivent etre remplis.");
   }
 
@@ -66,16 +67,20 @@ router.post("/register", async (req, res) => {
       .send("Inscription indisponible : configurez SUPABASE_URL, SUPABASE_ANON_KEY et SUPABASE_SERVICE_ROLE_KEY.");
   }
 
-  const { data: authData, error: authErr } = await svc.auth.admin.createUser({
-    email: String(email).trim().toLowerCase(),
-    password: String(password),
-    email_confirm: true,
-  });
-  if (authErr || !authData?.user?.id) {
-    return res.status(400).send(`Compte Auth : ${authErr?.message || "creation impossible"}`);
+  const emailNorm = String(email).trim().toLowerCase();
+  const invite = await inviteStaffSupabaseUser(emailNorm, { redirectPath: "/login" });
+  if (!invite.ok) {
+    return res.status(400).send(`Compte Auth : ${invite.error}`);
+  }
+  if (invite.alreadyExisted) {
+    return res
+      .status(400)
+      .send(
+        "Cet e-mail est deja utilise pour un compte Supabase. Connectez-vous, ou utilisez une autre adresse pour creer une nouvelle organisation."
+      );
   }
 
-  const authUid = authData.user.id;
+  const authUid = invite.authUid;
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -93,7 +98,7 @@ router.post("/register", async (req, res) => {
       });
       await tx.user.create({
         data: {
-          email: String(email).trim().toLowerCase(),
+          email: emailNorm,
           passwordHash: null,
           authUid,
           firstName,
@@ -112,24 +117,7 @@ router.post("/register", async (req, res) => {
     return res.status(400).send(`Erreur inscription: ${error.message}`);
   }
 
-  try {
-    const supabase = createSupabaseRouteClient(req, res);
-    const { error: signErr } = await supabase.auth.signInWithPassword({
-      email: String(email).trim().toLowerCase(),
-      password: String(password),
-    });
-    if (signErr) {
-      return res
-        .status(201)
-        .send(
-          "Organisation creee. La session automatique a echoue : connectez-vous sur la page de connexion avec le meme e-mail et mot de passe."
-        );
-    }
-  } catch (e) {
-    return res.status(201).send(`Organisation creee mais connexion automatique impossible : ${e.message}`);
-  }
-
-  return res.redirect("/dashboard");
+  return res.render("register-pending", { email: emailNorm });
 });
 
 router.get("/login", async (req, res) => {
@@ -137,21 +125,24 @@ router.get("/login", async (req, res) => {
   const err = typeof req.query.err === "string" ? req.query.err : "";
   const from = typeof req.query.from === "string" ? req.query.from : "";
   let loginAlert = null;
-  if (err === "champs") {
+
+  if (!isSupabaseAuthConfigured()) {
+    loginAlert =
+      "L’authentification nécessite Supabase : sur Netlify, ouvrez Site configuration → Environment variables et ajoutez SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY (et DATABASE_URL pour la base). Les deux premières se trouvent dans Supabase → Project Settings → API. Enregistrez puis lancez un nouveau déploiement.";
+  } else if (err === "config") {
+    loginAlert =
+      "Variables Supabase incomplètes ou invalides. Vérifiez SUPABASE_URL et SUPABASE_ANON_KEY sur l’hébergeur, puis redéployez.";
+  } else if (err === "champs") {
     loginAlert =
       "Merci de remplir l’e-mail et le mot de passe. Si le problème persiste, rechargez la page (Ctrl+F5) puis réessayez.";
-  }
-  if (err === "auth") {
+  } else if (err === "auth") {
     loginAlert = "E-mail ou mot de passe incorrect.";
-  }
-  if (err === "noprofile") {
+  } else if (err === "noprofile") {
     loginAlert =
       "Aucun profil équipe ou client n’est lié à ce compte Supabase. Contactez votre administrateur ou utilisez l’e-mail enregistré chez votre fournisseur.";
-  }
-  if (err === "provision") {
+  } else if (err === "provision") {
     loginAlert = "La migration du compte vers Supabase a échoué. Vérifiez SUPABASE_SERVICE_ROLE_KEY côté serveur.";
-  }
-  if (err === "code_court") {
+  } else if (err === "code_court") {
     loginAlert =
       "Identifiants portail trop courts (minimum 6 caractères côté Supabase). Utilisez le mot de passe reçu par e-mail.";
   }
@@ -173,7 +164,7 @@ router.post("/login", loginLimiter, async (req, res) => {
       return res.redirect(302, "/login?err=champs");
     }
     if (result.reason === "config") {
-      return res.status(503).send(result.message || "Supabase non configure.");
+      return res.redirect(302, "/login?err=config");
     }
     if (result.reason === "provision") {
       return res.redirect(302, "/login?err=provision");
@@ -192,8 +183,10 @@ router.post("/login", loginLimiter, async (req, res) => {
 
 router.post("/logout", async (req, res) => {
   try {
-    const supabase = createSupabaseRouteClient(req, res);
-    await supabase.auth.signOut();
+    if (isSupabaseAuthConfigured()) {
+      const supabase = createSupabaseRouteClient(req, res);
+      await supabase.auth.signOut();
+    }
   } catch (_) {
     /* ignore */
   }

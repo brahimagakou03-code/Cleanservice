@@ -72,7 +72,9 @@ async function performUnifiedLogin(req, res, { email, password, code }) {
   }
 
   if (!authUser) {
-    const localUser = await prisma.user.findUnique({ where: { email: em } });
+    const localUser = await prisma.user.findFirst({
+      where: { email: { equals: em, mode: "insensitive" } },
+    });
     if (localUser?.passwordHash && pwd && (await comparePassword(pwd, localUser.passwordHash))) {
       const ensured = await ensureStaffSupabaseAuthUser(em, pwd);
       if (!ensured.ok) {
