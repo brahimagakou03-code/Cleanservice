@@ -26,6 +26,35 @@ function normalizeDatabaseUrl(raw) {
   return u;
 }
 
+/**
+ * @returns {string} Message d’erreur lisible si l’URL semble invalide / template ; chaîne vide si OK.
+ */
+function getDatabaseUrlConfigError(raw) {
+  if (!raw || typeof raw !== "string" || !raw.trim()) {
+    return "DATABASE_URL est vide : definissez l’URI PostgreSQL (Supabase → Project Settings → Database).";
+  }
+  const s = raw.trim();
+  if (/votre_mot_de_passe/i.test(s)) {
+    return (
+      "DATABASE_URL contient encore le mot de passe d’exemple (ex. VOTRE_MOT_DE_PASSE_DB). " +
+      "Remplacez-le par le mot de passe réel de la base : Supabase → Project Settings → Database."
+    );
+  }
+  if (/your[_-]?password|\[your-password\]|changeme_db/i.test(s)) {
+    return "DATABASE_URL semble utiliser un mot de passe d’exemple : mettez le mot de passe réel depuis le tableau Supabase.";
+  }
+  try {
+    const u = new URL(s.replace(/^postgresql:/i, "http:"));
+    const pass = decodeURIComponent(u.password || "");
+    if (!pass) {
+      return "DATABASE_URL : aucun mot de passe dans l’URI. Copiez la chaine complète depuis Supabase.";
+    }
+  } catch {
+    return "DATABASE_URL n’est pas une URL PostgreSQL valide.";
+  }
+  return "";
+}
+
 const resolvedDbUrl = normalizeDatabaseUrl(process.env.DATABASE_URL);
 
 if (process.env.NETLIFY === "true" && process.env.DATABASE_URL) {
@@ -135,4 +164,4 @@ function withSkipTenant(fn) {
   return requestContext.run({ ...store, skipTenant: true }, fn);
 }
 
-module.exports = { prisma, requestContext, withSkipTenant };
+module.exports = { prisma, requestContext, withSkipTenant, getDatabaseUrlConfigError };
