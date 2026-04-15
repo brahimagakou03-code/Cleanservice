@@ -24,7 +24,8 @@ const { csrfWithLoginBypass, attachCsrfToken } = require("./middleware/csrfAuthB
 const { netlifyEventFormBodyMerge } = require("./middleware/netlifyEventFormBody");
 
 const app = express();
-app.set("trust proxy", true);
+// Netlify place l'app derrière un proxy unique : "1" évite les erreurs express-rate-limit.
+app.set("trust proxy", 1);
 
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
