@@ -14,12 +14,23 @@ const { mergeFormBody } = require("../utils/mergeFormBody");
 
 const router = express.Router();
 
+function limiterKey(req) {
+  const forwarded = String(req.headers["x-forwarded-for"] || "")
+    .split(",")[0]
+    .trim();
+  const nfIp = String(req.headers["x-nf-client-connection-ip"] || "").trim();
+  const socketIp = String(req.socket?.remoteAddress || "").trim();
+  return forwarded || nfIp || req.ip || socketIp || "unknown";
+}
+
 const portalLoginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
   message: "Trop de tentatives de connexion. Reessayez dans 15 minutes.",
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: limiterKey,
+  validate: false,
 });
 
 /** Pages portail avec en-tête : alertes chargées pour la cloche et le bloc « Vos alertes ». */

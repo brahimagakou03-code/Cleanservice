@@ -40,12 +40,23 @@ async function redirectIfAlreadyAuthenticated(req, res) {
   return false;
 }
 
+function limiterKey(req) {
+  const forwarded = String(req.headers["x-forwarded-for"] || "")
+    .split(",")[0]
+    .trim();
+  const nfIp = String(req.headers["x-nf-client-connection-ip"] || "").trim();
+  const socketIp = String(req.socket?.remoteAddress || "").trim();
+  return forwarded || nfIp || req.ip || socketIp || "unknown";
+}
+
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
   message: "Trop de tentatives de connexion. Reessayez dans 15 minutes.",
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: limiterKey,
+  validate: false,
 });
 
 router.get("/register", async (req, res) => {
