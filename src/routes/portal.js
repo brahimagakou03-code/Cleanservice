@@ -1,5 +1,7 @@
 const express = require("express");
 const rateLimit = require("express-rate-limit");
+const crypto = require("node:crypto");
+const nodemailer = require("nodemailer");
 const { prisma } = require("../db");
 const { getPriceForCustomer } = require("../utils/pricing");
 const { computeOrderTotals, STATUS, nextOrderNumber } = require("../utils/orders");
@@ -11,8 +13,12 @@ const { attachPortalNotifications } = require("../middleware/portalNotifications
 const { TYPE, notifyUsersByRoles } = require("../utils/notifications");
 const { assertPortalCartStockAvailable } = require("../utils/orderStock");
 const { mergeFormBody } = require("../utils/mergeFormBody");
+const { inviteStaffSupabaseUser } = require("../utils/supabaseAuth");
+const { Role } = require("../utils/rbac");
 
 const router = express.Router();
+const ADMIN_OTP_TTL_MS = 10 * 60 * 1000;
+const pendingAdminSignups = new Map();
 
 function limiterKey(req) {
   const forwarded = String(req.headers["x-forwarded-for"] || "")
@@ -27,6 +33,16 @@ const portalLoginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
   message: "Trop de tentatives de connexion. Reessayez dans 15 minutes.",
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: limiterKey,
+  validate: false,
+});
+
+const adminOtpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: "Trop de demandes OTP. Reessayez dans 15 minutes.",
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: limiterKey,
@@ -109,7 +125,275 @@ function stripHtmlShort(html, maxLen) {
   return `${t.slice(0, maxLen).trimEnd()}…`;
 }
 
+function portalSlugifyText(text) {
+  return String(text || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function htmlEscape(text) {
+  return String(text || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function generateOtpCode() {
+  return String(crypto.randomInt(100000, 999999));
+}
+
+function hashOtp(email, otp) {
+  return crypto
+    .createHash("sha256")
+    .update(`${String(email || "").trim().toLowerCase()}::${String(otp || "").trim()}`)
+    .digest("hex");
+}
+
+function cleanupPendingAdminSignups() {
+  const now = Date.now();
+  for (const [id, entry] of pendingAdminSignups.entries()) {
+    if (!entry || entry.expiresAt <= now) pendingAdminSignups.delete(id);
+  }
+}
+
+function adminOtpTemplate({ firstName, otp, expiresMinutes }) {
+  const safeFirstName = htmlEscape(firstName || "Admin");
+  const safeOtp = htmlEscape(otp);
+  return {
+    subject: "Code OTP inscription administrateur",
+    html: `<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;padding:24px;">
+      <h2>Inscription administrateur magasin</h2>
+      <p>Bonjour ${safeFirstName},</p>
+      <p>Votre code OTP est :</p>
+      <p style="font-size:28px;letter-spacing:4px;font-weight:700;background:#f3f5f8;padding:12px 16px;border-radius:8px;display:inline-block;">${safeOtp}</p>
+      <p>Ce code expire dans ${expiresMinutes} minutes.</p>
+      <p>Si vous n'etes pas a l'origine de cette demande, ignorez cet e-mail.</p>
+    </div>`,
+  };
+}
+
+async function sendAdminOtpEmail(toEmail, firstName, otp) {
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST || "127.0.0.1",
+    port: Number(process.env.SMTP_PORT || 1025),
+    secure: false,
+    auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS || "" } : undefined,
+  });
+  const mail = adminOtpTemplate({ firstName, otp, expiresMinutes: Math.round(ADMIN_OTP_TTL_MS / 60000) });
+  await transporter.sendMail({
+    from: process.env.MAIL_FROM || "no-reply@example.invalid",
+    to: toEmail,
+    subject: mail.subject,
+    html: mail.html,
+  });
+}
+
+function parseAdminSignupBody(req) {
+  const body = mergeFormBody(req);
+  return {
+    orgName: String(body.orgName || "").trim(),
+    slug: String(body.slug || "").trim().toLowerCase(),
+    siret: String(body.siret || "").trim(),
+    address: String(body.address || "").trim(),
+    phone: String(body.phone || "").trim(),
+    orgEmail: String(body.orgEmail || "").trim().toLowerCase(),
+    firstName: String(body.firstName || "").trim(),
+    lastName: String(body.lastName || "").trim(),
+    email: String(body.email || "").trim().toLowerCase(),
+  };
+}
+
+function validateAdminSignupPayload(payload) {
+  if (
+    !payload.orgName ||
+    !payload.slug ||
+    !payload.siret ||
+    !payload.address ||
+    !payload.phone ||
+    !payload.orgEmail ||
+    !payload.firstName ||
+    !payload.lastName ||
+    !payload.email
+  ) {
+    return "Tous les champs obligatoires doivent etre remplis.";
+  }
+  if (!/^[a-z0-9-]{3,60}$/.test(payload.slug)) {
+    return "Slug invalide (3-60 caracteres: lettres, chiffres, tirets).";
+  }
+  if (!/^\S+@\S+\.\S+$/.test(payload.email) || !/^\S+@\S+\.\S+$/.test(payload.orgEmail)) {
+    return "Merci de saisir des e-mails valides.";
+  }
+  return null;
+}
+
 router.get("/login", (_req, res) => res.redirect(302, "/login?from=portal"));
+
+router.get("/register-admin", (_req, res) => {
+  return res.render("portal-register-admin", {
+    error: null,
+    success: null,
+    otpStep: false,
+    signupId: "",
+    formData: {},
+  });
+});
+
+router.post("/register-admin/request-otp", adminOtpLimiter, async (req, res) => {
+  cleanupPendingAdminSignups();
+  const payload = parseAdminSignupBody(req);
+  const validationError = validateAdminSignupPayload(payload);
+  if (validationError) {
+    return res.status(400).render("portal-register-admin", {
+      error: validationError,
+      success: null,
+      otpStep: false,
+      signupId: "",
+      formData: payload,
+    });
+  }
+
+  const [existingOrg, existingSiret, existingUser] = await Promise.all([
+    prisma.organization.findUnique({ where: { slug: payload.slug } }),
+    prisma.organization.findUnique({ where: { siret: payload.siret } }),
+    prisma.user.findFirst({ where: { email: { equals: payload.email, mode: "insensitive" } } }),
+  ]);
+  if (existingOrg || existingSiret || existingUser) {
+    return res.status(400).render("portal-register-admin", {
+      error: "Impossible de demarrer l'inscription: slug, SIRET ou e-mail deja utilise.",
+      success: null,
+      otpStep: false,
+      signupId: "",
+      formData: payload,
+    });
+  }
+
+  const otp = generateOtpCode();
+  const signupId = crypto.randomUUID();
+  pendingAdminSignups.set(signupId, {
+    payload,
+    otpHash: hashOtp(payload.email, otp),
+    expiresAt: Date.now() + ADMIN_OTP_TTL_MS,
+  });
+
+  try {
+    await sendAdminOtpEmail(payload.email, payload.firstName, otp);
+  } catch (err) {
+    pendingAdminSignups.delete(signupId);
+    return res.status(500).render("portal-register-admin", {
+      error: `OTP non envoye: ${err.message}`,
+      success: null,
+      otpStep: false,
+      signupId: "",
+      formData: payload,
+    });
+  }
+
+  return res.render("portal-register-admin", {
+    error: null,
+    success: "Code OTP envoye. Verifiez votre e-mail puis saisissez le code pour finaliser l'inscription.",
+    otpStep: true,
+    signupId,
+    formData: payload,
+  });
+});
+
+router.post("/register-admin/verify-otp", adminOtpLimiter, async (req, res) => {
+  cleanupPendingAdminSignups();
+  const body = mergeFormBody(req);
+  const signupId = String(body.signupId || "").trim();
+  const otp = String(body.otp || "").trim();
+  const pending = pendingAdminSignups.get(signupId);
+  if (!pending) {
+    return res.status(400).render("portal-register-admin", {
+      error: "Session OTP expirée ou introuvable. Recommencez l'inscription.",
+      success: null,
+      otpStep: false,
+      signupId: "",
+      formData: {},
+    });
+  }
+  if (!otp || hashOtp(pending.payload.email, otp) !== pending.otpHash) {
+    return res.status(400).render("portal-register-admin", {
+      error: "Code OTP invalide.",
+      success: null,
+      otpStep: true,
+      signupId,
+      formData: pending.payload,
+    });
+  }
+
+  const { payload } = pending;
+  let authUid = null;
+  const invite = await inviteStaffSupabaseUser(payload.email, { redirectPath: "/login" });
+  if (!invite.ok) {
+    return res.status(400).render("portal-register-admin", {
+      error: `Compte Auth: ${invite.error}`,
+      success: null,
+      otpStep: true,
+      signupId,
+      formData: payload,
+    });
+  }
+  authUid = invite.authUid;
+  if (invite.alreadyExisted) {
+    return res.status(400).render("portal-register-admin", {
+      error: "Cet e-mail est deja associe a un compte Auth. Utilisez une autre adresse.",
+      success: null,
+      otpStep: true,
+      signupId,
+      formData: payload,
+    });
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const org = await tx.organization.create({
+        data: {
+          name: payload.orgName,
+          slug: payload.slug || portalSlugifyText(payload.orgName),
+          siret: payload.siret,
+          address: payload.address,
+          phone: payload.phone,
+          email: payload.orgEmail,
+          isPlatform: false,
+        },
+      });
+      await tx.user.create({
+        data: {
+          email: payload.email,
+          passwordHash: null,
+          authUid,
+          firstName: payload.firstName,
+          lastName: payload.lastName,
+          role: Role.ADMIN,
+          organizationId: org.id,
+        },
+      });
+    });
+  } catch (error) {
+    return res.status(400).render("portal-register-admin", {
+      error: `Erreur inscription: ${error.message}`,
+      success: null,
+      otpStep: true,
+      signupId,
+      formData: payload,
+    });
+  } finally {
+    pendingAdminSignups.delete(signupId);
+  }
+
+  return res.render("portal-register-admin", {
+    error: null,
+    success: "Compte administrateur cree. Consultez votre e-mail pour definir votre mot de passe, puis connectez-vous.",
+    otpStep: false,
+    signupId: "",
+    formData: {},
+  });
+});
 
 router.post("/login", portalLoginLimiter, async (req, res) => {
   const body = mergeFormBody(req);
