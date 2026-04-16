@@ -3,28 +3,27 @@
   <head><meta charset="UTF-8"><title>Inscription</title><%- include("partials/favicon") %><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"><link href="/public/styles/app.css" rel="stylesheet"></head>
   <body class="bg-light">
     <%- include("partials/auth-header", { mode: "staff" }) %>
-    <div class="container py-4" style="max-width:760px;">
+    <div class="container py-4" style="max-width:560px;">
     <div class="text-center mb-4"><img src="<%= typeof platformLogoUrl !== 'undefined' ? platformLogoUrl : '/branding/logo.png' %>" class="cs-logo-hero" alt="Clean Service"></div>
-    <h1 class="h3">Inscription Organisation + Propriétaire</h1>
+    <h1 class="h3">Inscription administrateur</h1>
     <% if (typeof registerAlert !== "undefined" && registerAlert) { %>
       <div class="alert alert-warning" role="alert"><%= registerAlert %></div>
+    <% } %>
+    <% if (typeof registerSuccess !== "undefined" && registerSuccess) { %>
+      <div class="alert alert-success" role="alert"><%= registerSuccess %></div>
     <% } %>
     <form method="POST" action="/register" class="card p-3">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
       <p class="small text-muted mb-2"><span class="text-danger" aria-hidden="true">*</span> Champ obligatoire</p>
-      <h2>Organisation</h2>
-      <label>Nom <span class="text-danger" aria-hidden="true">*</span> <input name="orgName" required /></label><br />
-      <label>Slug <span class="text-danger" aria-hidden="true">*</span> <input name="slug" required /></label><br />
-      <label>SIRET <span class="text-danger" aria-hidden="true">*</span> <input name="siret" required /></label><br />
-      <label>Adresse <span class="text-danger" aria-hidden="true">*</span> <input name="address" required /></label><br />
-      <label>Téléphone <span class="text-danger" aria-hidden="true">*</span> <input name="phone" required /></label><br />
-      <label>E-mail entreprise <span class="text-danger" aria-hidden="true">*</span> <input type="email" name="orgEmail" required /></label><br />
-      <label>Logo (URL) <input name="logo" /></label><br />
-      <h2>Utilisateur propriétaire</h2>
-      <label>Prénom <span class="text-danger" aria-hidden="true">*</span> <input name="firstName" required /></label><br />
-      <label>Nom <span class="text-danger" aria-hidden="true">*</span> <input name="lastName" required /></label><br />
-      <label>E-mail <span class="text-danger" aria-hidden="true">*</span> <input type="email" name="email" required /></label><br />
-      <p class="small text-muted">Après validation, vous recevrez un e-mail avec un lien pour <strong>définir votre mot de passe</strong> avant la première connexion.</p>
+      <label class="form-label" for="firstName">Prénom <span class="text-danger" aria-hidden="true">*</span></label>
+      <input id="firstName" class="form-control" name="firstName" required />
+      <label class="form-label mt-3" for="lastName">Nom <span class="text-danger" aria-hidden="true">*</span></label>
+      <input id="lastName" class="form-control" name="lastName" required />
+      <label class="form-label mt-3" for="email">E-mail <span class="text-danger" aria-hidden="true">*</span></label>
+      <input id="email" class="form-control" type="email" name="email" required autocomplete="email" />
+      <label class="form-label mt-3" for="password">Mot de passe <span class="text-danger" aria-hidden="true">*</span></label>
+      <input id="password" class="form-control" type="password" name="password" required minlength="6" autocomplete="new-password" />
+      <p class="small text-muted mt-3">Mot de passe minimum 6 caractères.</p>
       <button class="btn btn-primary" type="submit">Créer mon espace</button>
     </form>
     <p class="mt-3"><a href="/login">Déjà inscrit ? Se connecter</a></p>

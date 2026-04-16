@@ -5,8 +5,7 @@ const { clearAuthCookies, clearClientPortalCookie } = require("../utils/auth");
 const { Role } = require("../utils/rbac");
 const { mergeFormBody } = require("../utils/mergeFormBody");
 const { createSupabaseRouteClient, isSupabaseAuthConfigured } = require("../utils/supabaseExpress");
-const { createSupabaseServiceClient } = require("../lib/supabase");
-const { resolveAppIdentity, inviteStaffSupabaseUser } = require("../utils/supabaseAuth");
+const { resolveAppIdentity, ensureStaffSupabaseAuthUser } = require("../utils/supabaseAuth");
 const { performUnifiedLogin } = require("../services/unifiedLogin");
 
 const router = express.Router();
@@ -65,86 +64,96 @@ function isPrismaDbUnreachable(err) {
   return code === "P1001" || msg.includes("Can't reach database server") || msg.includes("P1001");
 }
 
+function isUniqueConstraintError(err) {
+  return String(err?.code || "") === "P2002";
+}
+
 router.get("/register", async (req, res) => {
   if (await redirectIfAlreadyAuthenticated(req, res)) return;
   const err = typeof req.query.err === "string" ? req.query.err : "";
+  const ok = req.query.ok === "1";
   let registerAlert = null;
-  if (err === "db") {
+  let registerSuccess = null;
+  if (ok) {
+    registerSuccess = "Compte admin cree. Vous pouvez maintenant vous connecter avec votre e-mail et mot de passe.";
+  } else if (err === "champs") {
+    registerAlert = "Merci de remplir tous les champs obligatoires.";
+  } else if (err === "password") {
+    registerAlert = "Mot de passe trop court (minimum 6 caracteres).";
+  } else if (err === "exist") {
+    registerAlert = "Cet e-mail est deja utilise. Connectez-vous ou utilisez une autre adresse.";
+  } else if (err === "auth") {
+    registerAlert = "Creation du compte impossible cote authentification. Reessayez dans quelques instants.";
+  } else if (err === "org") {
+    registerAlert = "Aucune organisation n'est configuree pour rattacher ce compte administrateur.";
+  } else if (err === "config") {
+    registerAlert = "Configuration d'inscription incomplete. Verifiez les variables Supabase cote hebergeur.";
+  } else if (err === "db") {
     registerAlert =
       "La base de donnees ne repond pas depuis l'hebergeur. Verifiez DATABASE_URL avec l'URI 'Transaction pooler' (port 6543) dans Supabase, puis redeployez.";
-  } else if (err === "config") {
-    registerAlert =
-      "Configuration d'inscription incomplete. Verifiez SUPABASE_URL, SUPABASE_ANON_KEY et SUPABASE_SERVICE_ROLE_KEY.";
   }
-  return res.render("register", { registerAlert });
+  return res.render("register", { registerAlert, registerSuccess });
 });
 
 router.post("/register", async (req, res) => {
   const body = mergeFormBody(req);
-  const { orgName, slug, siret, address, phone, orgEmail, logo, email, firstName, lastName } = body;
-  if (!orgName || !slug || !siret || !address || !phone || !orgEmail || !email || !firstName || !lastName) {
-    return res.status(400).send("Tous les champs obligatoires doivent etre remplis.");
+  const firstName = String(body.firstName || "").trim();
+  const lastName = String(body.lastName || "").trim();
+  const emailNorm = String(body.email || "")
+    .trim()
+    .toLowerCase();
+  const password = String(body.password || "");
+  if (!firstName || !lastName || !emailNorm || !password) {
+    return res.redirect(302, "/register?err=champs");
+  }
+  if (password.length < 6) {
+    return res.redirect(302, "/register?err=password");
   }
 
-  const svc = createSupabaseServiceClient();
-  if (!svc) {
+  if (!isSupabaseAuthConfigured()) {
     return res.redirect(302, "/register?err=config");
   }
 
-  const emailNorm = String(email).trim().toLowerCase();
-  const invite = await inviteStaffSupabaseUser(emailNorm, { redirectPath: "/login" });
-  if (!invite.ok) {
-    return res.status(400).send(`Compte Auth : ${invite.error}`);
+  const authUser = await ensureStaffSupabaseAuthUser(emailNorm, password);
+  if (!authUser.ok) {
+    if (String(authUser.error || "").includes("SUPABASE_SERVICE_ROLE_KEY")) {
+      return res.redirect(302, "/register?err=config");
+    }
+    return res.redirect(302, "/register?err=auth");
   }
-  if (invite.alreadyExisted) {
-    return res
-      .status(400)
-      .send(
-        "Cet e-mail est deja utilise pour un compte Supabase. Connectez-vous, ou utilisez une autre adresse pour creer une nouvelle organisation."
-      );
-  }
-
-  const authUid = invite.authUid;
 
   try {
+    const targetOrg =
+      (await prisma.organization.findFirst({ where: { isPlatform: true }, select: { id: true } })) ||
+      (await prisma.organization.findFirst({ select: { id: true } }));
+    if (!targetOrg) {
+      return res.redirect(302, "/register?err=org");
+    }
+
     await prisma.$transaction(async (tx) => {
-      const org = await tx.organization.create({
-        data: {
-          name: orgName,
-          slug,
-          siret,
-          address,
-          phone,
-          email: orgEmail,
-          logo: logo || null,
-          isPlatform: false,
-        },
-      });
       await tx.user.create({
         data: {
           email: emailNorm,
           passwordHash: null,
-          authUid,
+          authUid: authUser.authUid,
           firstName,
           lastName,
-          role: Role.OWNER,
-          organizationId: org.id,
+          role: Role.ADMIN,
+          organizationId: targetOrg.id,
         },
       });
     });
   } catch (error) {
-    try {
-      await svc.auth.admin.deleteUser(authUid);
-    } catch (_) {
-      /* ignore */
-    }
     if (isPrismaDbUnreachable(error)) {
       return res.redirect(302, "/register?err=db");
+    }
+    if (isUniqueConstraintError(error)) {
+      return res.redirect(302, "/register?err=exist");
     }
     return res.status(400).send(`Erreur inscription: ${error.message}`);
   }
 
-  return res.render("register-pending", { email: emailNorm });
+  return res.redirect(302, "/register?ok=1");
 });
 
 router.get("/login", async (req, res) => {
