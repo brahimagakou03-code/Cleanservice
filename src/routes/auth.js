@@ -59,9 +59,24 @@ const loginLimiter = rateLimit({
   validate: false,
 });
 
+function isPrismaDbUnreachable(err) {
+  const code = err?.code;
+  const msg = String(err?.message || "");
+  return code === "P1001" || msg.includes("Can't reach database server") || msg.includes("P1001");
+}
+
 router.get("/register", async (req, res) => {
   if (await redirectIfAlreadyAuthenticated(req, res)) return;
-  return res.render("register");
+  const err = typeof req.query.err === "string" ? req.query.err : "";
+  let registerAlert = null;
+  if (err === "db") {
+    registerAlert =
+      "La base de donnees ne repond pas depuis l'hebergeur. Verifiez DATABASE_URL avec l'URI 'Transaction pooler' (port 6543) dans Supabase, puis redeployez.";
+  } else if (err === "config") {
+    registerAlert =
+      "Configuration d'inscription incomplete. Verifiez SUPABASE_URL, SUPABASE_ANON_KEY et SUPABASE_SERVICE_ROLE_KEY.";
+  }
+  return res.render("register", { registerAlert });
 });
 
 router.post("/register", async (req, res) => {
@@ -73,9 +88,7 @@ router.post("/register", async (req, res) => {
 
   const svc = createSupabaseServiceClient();
   if (!svc) {
-    return res
-      .status(503)
-      .send("Inscription indisponible : configurez SUPABASE_URL, SUPABASE_ANON_KEY et SUPABASE_SERVICE_ROLE_KEY.");
+    return res.redirect(302, "/register?err=config");
   }
 
   const emailNorm = String(email).trim().toLowerCase();
@@ -124,6 +137,9 @@ router.post("/register", async (req, res) => {
       await svc.auth.admin.deleteUser(authUid);
     } catch (_) {
       /* ignore */
+    }
+    if (isPrismaDbUnreachable(error)) {
+      return res.redirect(302, "/register?err=db");
     }
     return res.status(400).send(`Erreur inscription: ${error.message}`);
   }
