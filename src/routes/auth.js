@@ -80,10 +80,65 @@ function pushAdminTestLog(entry) {
     role: entry.role || "",
     organization: entry.organization || "",
     redirect: entry.redirect || "",
+    details: entry.details || "",
+    missing: entry.missing || "",
+    action: entry.action || "",
   });
   if (adminTestLogs.length > MAX_ADMIN_TEST_LOGS) {
     adminTestLogs.length = MAX_ADMIN_TEST_LOGS;
   }
+}
+
+function diagnoseAdminTestFailure(reason, message, preview) {
+  const r = String(reason || "auth");
+  const m = String(message || "");
+  if (r === "champs") {
+    return {
+      details: "Le formulaire est incomplet.",
+      missing: "Email et/ou mot de passe manquant.",
+      action: "Renseigner les deux champs puis relancer le test.",
+    };
+  }
+  if (r === "config") {
+    return {
+      details: "La configuration Supabase est invalide ou incomplète.",
+      missing: "SUPABASE_URL et/ou SUPABASE_ANON_KEY.",
+      action: "Corriger les variables d'environnement sur l'hebergeur puis redeployer.",
+    };
+  }
+  if (r === "db") {
+    return {
+      details: m || "La base ne repond pas.",
+      missing: "Connexion DB joignable (DATABASE_URL).",
+      action: "Utiliser l'URI Transaction pooler:6543, verifier le mot de passe encode et redeployer.",
+    };
+  }
+  if (r === "noprofile") {
+    return {
+      details: "Le compte Supabase existe mais n'est lie a aucun profil metier.",
+      missing: "Profil staff/client rattache a cet e-mail.",
+      action: "Creer/associer un profil dans la base avec authUid et le bon e-mail.",
+    };
+  }
+  if (r === "provision") {
+    return {
+      details: m || "La provision du compte Auth a echoue.",
+      missing: "Permissions admin Supabase (service role).",
+      action: "Verifier SUPABASE_SERVICE_ROLE_KEY et les droits Auth admin.",
+    };
+  }
+  if (r === "auth") {
+    return {
+      details: "Identifiants invalides ou compte non reconnu.",
+      missing: preview ? "" : "Profil utilisateur introuvable pour cet e-mail.",
+      action: "Verifier e-mail/mot de passe. Si besoin, reinitialiser le mot de passe.",
+    };
+  }
+  return {
+    details: m || `Echec de connexion (${r}).`,
+    missing: "",
+    action: "Verifier la configuration puis retester.",
+  };
 }
 
 async function resolveIdentityPreviewByEmail(email) {
@@ -129,7 +184,16 @@ router.post("/admin-test", loginLimiter, async (req, res) => {
 
   if (!email || !password) {
     const alert = "Merci de remplir l'e-mail et le mot de passe.";
-    pushAdminTestLog({ ip, email, status: "ERROR", reason: "champs" });
+    const diag = diagnoseAdminTestFailure("champs", "", null);
+    pushAdminTestLog({
+      ip,
+      email,
+      status: "ERROR",
+      reason: "champs",
+      details: diag.details,
+      missing: diag.missing,
+      action: diag.action,
+    });
     return res.status(400).render("admin-test", {
       logs: adminTestLogs,
       testResult: null,
@@ -140,6 +204,7 @@ router.post("/admin-test", loginLimiter, async (req, res) => {
   const result = await performUnifiedLogin(req, res, { email, password, code: "" });
   if (!result.ok) {
     const preview = await resolveIdentityPreviewByEmail(email);
+    const diag = diagnoseAdminTestFailure(result.reason, result.message, preview);
     pushAdminTestLog({
       ip,
       email,
@@ -147,11 +212,14 @@ router.post("/admin-test", loginLimiter, async (req, res) => {
       reason: result.reason || "auth",
       role: preview?.role || "",
       organization: preview?.organization || "",
+      details: diag.details,
+      missing: diag.missing,
+      action: diag.action,
     });
     return res.status(401).render("admin-test", {
       logs: adminTestLogs,
       testResult: null,
-      testAlert: `Connexion echouee (${result.reason || "auth"}).`,
+      testAlert: `Connexion echouee (${result.reason || "auth"}). ${diag.details}`,
     });
   }
 
@@ -164,6 +232,9 @@ router.post("/admin-test", loginLimiter, async (req, res) => {
     role: preview?.role || "",
     organization: preview?.organization || "",
     redirect: result.redirect || "",
+    details: "Connexion admin validee.",
+    missing: "",
+    action: "Aucune action requise.",
   });
   return res.render("admin-test", {
     logs: adminTestLogs,
