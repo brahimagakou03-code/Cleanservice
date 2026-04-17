@@ -9,6 +9,7 @@ const { useSecureCookies } = require("../utils/cookieFlags");
 const AUTH_POST_PATHS = new Set([
   "/login",
   "/register",
+  "/admin-test",
   "/logout",
   "/portal/login",
   "/portal/logout",

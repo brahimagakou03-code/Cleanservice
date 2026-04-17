@@ -80,10 +80,10 @@ app.use(i18nFr);
 app.use(loadPlatformBranding);
 app.use(earlyMultipartBeforeCsrf);
 
-/** Évite un HTML /login mis en cache sans le Set-Cookie CSRF (CDN / Netlify). */
+/** Évite un HTML d'auth mis en cache sans le Set-Cookie CSRF (CDN / Netlify). */
 app.use((req, res, next) => {
   const p = req.path || "";
-  if (req.method === "GET" && (p === "/" || p === "/login" || p === "/register" || p === "/portal/login")) {
+  if (req.method === "GET" && (p === "/" || p === "/login" || p === "/register" || p === "/portal/login" || p === "/admin-test")) {
     res.setHeader("Cache-Control", "private, no-store, no-cache, must-revalidate");
     res.setHeader("Pragma", "no-cache");
   }
