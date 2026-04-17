@@ -9,6 +9,8 @@ const { resolveAppIdentity, ensureStaffSupabaseAuthUser } = require("../utils/su
 const { performUnifiedLogin } = require("../services/unifiedLogin");
 
 const router = express.Router();
+const MAX_ADMIN_TEST_LOGS = 300;
+const adminTestLogs = [];
 
 async function redirectIfAlreadyAuthenticated(req, res) {
   if (!isSupabaseAuthConfigured()) return false;
@@ -67,6 +69,113 @@ function isPrismaDbUnreachable(err) {
 function isUniqueConstraintError(err) {
   return String(err?.code || "") === "P2002";
 }
+
+function pushAdminTestLog(entry) {
+  adminTestLogs.unshift({
+    at: new Date(),
+    ip: entry.ip || "",
+    email: entry.email || "",
+    status: entry.status || "ERROR",
+    reason: entry.reason || "",
+    role: entry.role || "",
+    organization: entry.organization || "",
+    redirect: entry.redirect || "",
+  });
+  if (adminTestLogs.length > MAX_ADMIN_TEST_LOGS) {
+    adminTestLogs.length = MAX_ADMIN_TEST_LOGS;
+  }
+}
+
+async function resolveIdentityPreviewByEmail(email) {
+  const emailNorm = String(email || "")
+    .trim()
+    .toLowerCase();
+  if (!emailNorm) return null;
+  const user = await prisma.user.findFirst({
+    where: { email: { equals: emailNorm, mode: "insensitive" } },
+    include: { organization: true },
+  });
+  if (!user) return null;
+  return {
+    role: user.role,
+    organization: user.organization?.name || "",
+  };
+}
+
+function getRequestIp(req) {
+  const forwarded = String(req.headers["x-forwarded-for"] || "")
+    .split(",")[0]
+    .trim();
+  const nfIp = String(req.headers["x-nf-client-connection-ip"] || "").trim();
+  const socketIp = String(req.socket?.remoteAddress || "").trim();
+  return forwarded || nfIp || req.ip || socketIp || "unknown";
+}
+
+router.get("/admin-test", async (_req, res) => {
+  return res.render("admin-test", {
+    logs: adminTestLogs,
+    testResult: null,
+    testAlert: null,
+  });
+});
+
+router.post("/admin-test", loginLimiter, async (req, res) => {
+  const body = mergeFormBody(req);
+  const email = String(body.email || "")
+    .trim()
+    .toLowerCase();
+  const password = String(body.password || "");
+  const ip = getRequestIp(req);
+
+  if (!email || !password) {
+    const alert = "Merci de remplir l'e-mail et le mot de passe.";
+    pushAdminTestLog({ ip, email, status: "ERROR", reason: "champs" });
+    return res.status(400).render("admin-test", {
+      logs: adminTestLogs,
+      testResult: null,
+      testAlert: alert,
+    });
+  }
+
+  const result = await performUnifiedLogin(req, res, { email, password, code: "" });
+  if (!result.ok) {
+    const preview = await resolveIdentityPreviewByEmail(email);
+    pushAdminTestLog({
+      ip,
+      email,
+      status: "ERROR",
+      reason: result.reason || "auth",
+      role: preview?.role || "",
+      organization: preview?.organization || "",
+    });
+    return res.status(401).render("admin-test", {
+      logs: adminTestLogs,
+      testResult: null,
+      testAlert: `Connexion echouee (${result.reason || "auth"}).`,
+    });
+  }
+
+  const preview = await resolveIdentityPreviewByEmail(email);
+  pushAdminTestLog({
+    ip,
+    email,
+    status: "OK",
+    reason: "success",
+    role: preview?.role || "",
+    organization: preview?.organization || "",
+    redirect: result.redirect || "",
+  });
+  return res.render("admin-test", {
+    logs: adminTestLogs,
+    testAlert: null,
+    testResult: {
+      message: "Connexion reussie.",
+      redirect: result.redirect || "",
+      role: preview?.role || "inconnu",
+      organization: preview?.organization || "inconnue",
+    },
+  });
+});
 
 router.get("/register", async (req, res) => {
   if (await redirectIfAlreadyAuthenticated(req, res)) return;

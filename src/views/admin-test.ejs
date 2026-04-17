@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8">
+    <title>Test connexion admin</title>
+    <%- include("partials/favicon") %>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/public/styles/app.css" rel="stylesheet">
+  </head>
+  <body class="bg-light">
+    <%- include("partials/auth-header", { mode: "staff" }) %>
+    <div class="container py-4" style="max-width:1100px;">
+      <div class="text-center mb-4">
+        <img src="<%= typeof platformLogoUrl !== 'undefined' ? platformLogoUrl : '/branding/logo.png' %>" class="cs-logo-hero" alt="Clean Service">
+        <h1 class="h3 mt-3">Test de connexion profil admin</h1>
+      </div>
+
+      <% if (testAlert) { %>
+        <div class="alert alert-warning" role="alert"><%= testAlert %></div>
+      <% } %>
+      <% if (testResult) { %>
+        <div class="alert alert-success" role="alert">
+          <strong><%= testResult.message %></strong><br>
+          Role: <%= testResult.role %> | Organisation: <%= testResult.organization %> | Redirection: <%= testResult.redirect %>
+        </div>
+      <% } %>
+
+      <form method="POST" action="/admin-test" class="card p-3 mb-4">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <div class="row g-3">
+          <div class="col-md-5">
+            <label class="form-label" for="email">E-mail admin</label>
+            <input id="email" name="email" type="email" class="form-control" required autocomplete="username">
+          </div>
+          <div class="col-md-5">
+            <label class="form-label" for="password">Mot de passe</label>
+            <input id="password" name="password" type="password" class="form-control" required autocomplete="current-password">
+          </div>
+          <div class="col-md-2 d-flex align-items-end">
+            <button class="btn btn-primary w-100" type="submit">Tester</button>
+          </div>
+        </div>
+      </form>
+
+      <div class="card p-3">
+        <h2 class="h5 mb-3">Logs de test (memoire serveur)</h2>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>IP</th>
+                <th>Email</th>
+                <th>Statut</th>
+                <th>Raison</th>
+                <th>Role</th>
+                <th>Organisation</th>
+                <th>Redirect</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (!logs || !logs.length) { %>
+                <tr>
+                  <td colspan="8" class="text-muted">Aucun log pour le moment.</td>
+                </tr>
+              <% } %>
+              <% (logs || []).forEach((l) => { %>
+                <tr>
+                  <td><%= new Date(l.at).toLocaleString("fr-FR") %></td>
+                  <td><%= l.ip || "" %></td>
+                  <td><%= l.email || "" %></td>
+                  <td><%= l.status || "" %></td>
+                  <td><%= l.reason || "" %></td>
+                  <td><%= l.role || "" %></td>
+                  <td><%= l.organization || "" %></td>
+                  <td><%= l.redirect || "" %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
