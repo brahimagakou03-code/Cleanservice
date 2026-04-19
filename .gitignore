@@ -1,4 +1,7 @@
 node_modules
+
+# Fichiers temporaires locaux (tests curl / scripts)
+.tmp/
 # Keep environment variables out of version control
 .env
 .env.*

@@ -24,7 +24,7 @@
         <div class="alert alert-success" role="alert"><%= success %></div>
       <% } %>
       <% if (signupId) { %>
-        <form method="POST" action="/register/verify-otp" class="card p-3">
+        <form method="POST" action="/register/verify-otp" class="card p-3" enctype="application/x-www-form-urlencoded">
           <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
           <input type="hidden" name="signupId" value="<%= signupId %>" />
           <label class="form-label" for="otp">Code OTP <span class="text-danger" aria-hidden="true">*</span></label>

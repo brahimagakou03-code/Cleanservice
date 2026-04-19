@@ -12,7 +12,7 @@
     <% if (typeof registerSuccess !== "undefined" && registerSuccess) { %>
       <div class="alert alert-success" role="alert"><%= registerSuccess %></div>
     <% } %>
-    <form method="POST" action="/register" class="card p-3">
+    <form method="POST" action="/register" class="card p-3" enctype="application/x-www-form-urlencoded">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
       <p class="small text-muted mb-2"><span class="text-danger" aria-hidden="true">*</span> Champ obligatoire</p>
       <label class="form-label" for="firstName">Prénom <span class="text-danger" aria-hidden="true">*</span></label>

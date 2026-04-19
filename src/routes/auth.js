@@ -594,8 +594,17 @@ router.post("/register", registerOtpLimiter, async (req, res) => {
   try {
     await sendStaffRegisterOtpEmail(emailNorm, firstName, otp);
   } catch (err) {
-    pendingStaffRegisterSignups.delete(signupId);
-    return res.redirect(302, `/register?err=otp_send`);
+    if (process.env.NODE_ENV === "development") {
+      // En local sans catch-all SMTP (Mailpit/MailHog), permettre de tester le flux complet.
+      // Ne jamais activer en production : le code serait visible cote serveur.
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[register-otp] Echec envoi e-mail (${err?.message || err}). Mode dev : OTP pour ${emailNorm} = ${otp}`
+      );
+    } else {
+      pendingStaffRegisterSignups.delete(signupId);
+      return res.redirect(302, `/register?err=otp_send`);
+    }
   }
 
   const q = new URLSearchParams({ sid: signupId, email: emailNorm });
