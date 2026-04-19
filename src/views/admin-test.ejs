@@ -19,9 +19,23 @@
         <div class="alert alert-warning" role="alert"><%= testAlert %></div>
       <% } %>
       <% if (testResult) { %>
-        <div class="alert alert-success" role="alert">
+        <div class="alert <%= testResult.ok === false ? 'alert-warning' : 'alert-success' %>" role="alert">
           <strong><%= testResult.message %></strong><br>
-          Role: <%= testResult.role %> | Organisation: <%= testResult.organization %> | Redirection: <%= testResult.redirect %>
+          Role: <%= testResult.role %> | Organisation: <%= testResult.organization %> | Redirection: <%= testResult.redirect %><br>
+          JWT (session Supabase) : <strong><%= testResult.jwt || "" %></strong><% if (testResult.jwtDetails) { %> — <%= testResult.jwtDetails %><% } %>
+          <% if (testResult.steps && testResult.steps.length) { %>
+            <hr>
+            <div><strong>Etapes d'authentification :</strong></div>
+            <ul class="mb-0 mt-2">
+              <% testResult.steps.forEach((s) => { %>
+                <li>
+                  <strong><%= s.label %></strong> :
+                  <span class="<%= s.status === 'OK' ? 'text-success' : (s.status === 'KO' ? 'text-danger' : 'text-muted') %>"><%= s.status %></span>
+                  <% if (s.why) { %> — <%= s.why %><% } %>
+                </li>
+              <% }) %>
+            </ul>
+          <% } %>
         </div>
       <% } %>
 
@@ -59,12 +73,14 @@
                 <th>Role</th>
                 <th>Organisation</th>
                 <th>Redirect</th>
+                <th>JWT</th>
+                <th>Etapes auth</th>
               </tr>
             </thead>
             <tbody>
               <% if (!logs || !logs.length) { %>
                 <tr>
-                  <td colspan="11" class="text-muted">Aucun log pour le moment.</td>
+                  <td colspan="13" class="text-muted">Aucun log pour le moment.</td>
                 </tr>
               <% } %>
               <% (logs || []).forEach((l) => { %>
@@ -80,6 +96,8 @@
                   <td><%= l.role || "" %></td>
                   <td><%= l.organization || "" %></td>
                   <td><%= l.redirect || "" %></td>
+                  <td><%= l.jwt || "" %></td>
+                  <td class="small"><%= l.stepsSummary || "" %></td>
                 </tr>
               <% }) %>
             </tbody>

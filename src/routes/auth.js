@@ -1,5 +1,6 @@
 const express = require("express");
 const rateLimit = require("express-rate-limit");
+const jwt = require("jsonwebtoken");
 const { prisma } = require("../db");
 const { clearAuthCookies, clearClientPortalCookie } = require("../utils/auth");
 const { Role } = require("../utils/rbac");
@@ -80,6 +81,9 @@ function pushAdminTestLog(entry) {
     role: entry.role || "",
     organization: entry.organization || "",
     redirect: entry.redirect || "",
+    jwt: entry.jwt || "",
+    steps: Array.isArray(entry.steps) ? entry.steps : [],
+    stepsSummary: entry.stepsSummary || "",
     details: entry.details || "",
     missing: entry.missing || "",
     action: entry.action || "",
@@ -87,6 +91,67 @@ function pushAdminTestLog(entry) {
   if (adminTestLogs.length > MAX_ADMIN_TEST_LOGS) {
     adminTestLogs.length = MAX_ADMIN_TEST_LOGS;
   }
+}
+
+function makeAuthStep(label, status, why) {
+  return { label, status, why: why || "" };
+}
+
+function summarizeAuthSteps(steps) {
+  return (steps || [])
+    .map((s) => `${s.label}: ${s.status}${s.why ? ` (${s.why})` : ""}`)
+    .join(" | ");
+}
+
+function buildAuthSteps({ reason, email, password, preview, jwtCheck }) {
+  const r = String(reason || "auth");
+  const hasEmail = Boolean(String(email || "").trim());
+  const hasPassword = Boolean(String(password || ""));
+  const credentialsOk = hasEmail && hasPassword;
+  const configOk = isSupabaseAuthConfigured();
+  const profileKnown = Boolean(preview);
+  const loginOk = r === "success";
+  const jwtOk = loginOk && jwtCheck?.jwt === "OK";
+
+  return [
+    makeAuthStep(
+      "1. Champs formulaire",
+      credentialsOk ? "OK" : "KO",
+      credentialsOk ? "" : "Email ou mot de passe manquant."
+    ),
+    makeAuthStep(
+      "2. Config Supabase",
+      configOk ? "OK" : "KO",
+      configOk ? "" : "SUPABASE_URL / SUPABASE_ANON_KEY manquants ou invalides."
+    ),
+    makeAuthStep(
+      "3. Profil interne",
+      profileKnown ? "OK" : "KO",
+      profileKnown ? "" : "Aucun profil staff connu pour cet e-mail."
+    ),
+    makeAuthStep(
+      "4. Login Supabase",
+      loginOk ? "OK" : "KO",
+      loginOk
+        ? ""
+        : r === "auth"
+          ? "Identifiants invalides ou compte non reconnu."
+          : r === "db"
+            ? "Base de donnees injoignable pendant la tentative."
+            : r === "config"
+              ? "Client Supabase non initialisable."
+              : r === "provision"
+                ? "Provision du compte Auth impossible."
+                : r === "noprofile"
+                  ? "Compte Auth valide mais non lie a un profil metier."
+                  : `Echec de type ${r}.`
+    ),
+    makeAuthStep(
+      "5. JWT session",
+      loginOk ? (jwtOk ? "OK" : "KO") : "N/A",
+      loginOk ? (jwtOk ? "" : jwtCheck?.jwtDetails || "JWT absent ou invalide.") : "Non teste (connexion echouee)."
+    ),
+  ];
 }
 
 function diagnoseAdminTestFailure(reason, message, preview) {
@@ -166,6 +231,67 @@ function getRequestIp(req) {
   return forwarded || nfIp || req.ip || socketIp || "unknown";
 }
 
+/**
+ * Après connexion Supabase : lit la session côté serveur et contrôle le JWT d'accès (présence + exp).
+ * Ce n'est pas le cookie applicatif access_token (non utilisé aujourd'hui) : c'est le jeton Supabase Auth.
+ */
+async function summarizeSupabaseAccessJwtAfterLogin(req, res) {
+  try {
+    const supabase = createSupabaseRouteClient(req, res);
+    const { data, error } = await supabase.auth.getSession();
+    if (error) {
+      return {
+        jwt: "KO",
+        jwtDetails: `Session Supabase illisible : ${error.message || "erreur inconnue"}.`,
+      };
+    }
+    const token = data?.session?.access_token;
+    if (!token) {
+      return {
+        jwt: "KO",
+        jwtDetails: "Aucun access_token dans la session Supabase (cookies de session non posés ou session vide).",
+      };
+    }
+    const parts = String(token).split(".");
+    if (parts.length !== 3) {
+      return { jwt: "KO", jwtDetails: "Jeton recu mais format JWT invalide (segments != 3)." };
+    }
+    const decoded = jwt.decode(token, { complete: false });
+    if (!decoded || typeof decoded !== "object") {
+      return { jwt: "KO", jwtDetails: "Jeton JWT illisible (decode impossible)." };
+    }
+    const expSec = typeof decoded.exp === "number" ? decoded.exp : null;
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (expSec != null && expSec <= nowSec) {
+      return {
+        jwt: "KO",
+        jwtDetails: `JWT Supabase expire (exp=${expSec}, maintenant=${nowSec}).`,
+      };
+    }
+    const sub = typeof decoded.sub === "string" ? decoded.sub : "";
+    const role = typeof decoded.role === "string" ? decoded.role : "";
+    const aud = typeof decoded.aud === "string" ? decoded.aud : "";
+    const iss = typeof decoded.iss === "string" ? decoded.iss : "";
+    const expHuman =
+      expSec != null
+        ? new Date(expSec * 1000).toLocaleString("fr-FR", { timeZone: "UTC" }) + " UTC"
+        : "inconnue";
+    const bits = [
+      `exp=${expHuman}`,
+      sub ? `sub=${sub}` : "",
+      role ? `role_claim=${role}` : "",
+      aud ? `aud=${aud}` : "",
+      iss ? `iss=${iss}` : "",
+    ].filter(Boolean);
+    return { jwt: "OK", jwtDetails: `JWT Supabase present et non expire (${bits.join(" ; ")}).` };
+  } catch (e) {
+    return {
+      jwt: "KO",
+      jwtDetails: `Erreur lors de la lecture du JWT Supabase : ${e?.message || String(e)}`,
+    };
+  }
+}
+
 router.get("/admin-test", async (_req, res) => {
   return res.render("admin-test", {
     logs: adminTestLogs,
@@ -185,18 +311,30 @@ router.post("/admin-test", loginLimiter, async (req, res) => {
   if (!email || !password) {
     const alert = "Merci de remplir l'e-mail et le mot de passe.";
     const diag = diagnoseAdminTestFailure("champs", "", null);
+    const steps = buildAuthSteps({ reason: "champs", email, password, preview: null, jwtCheck: null });
     pushAdminTestLog({
       ip,
       email,
       status: "ERROR",
       reason: "champs",
+      steps,
+      stepsSummary: summarizeAuthSteps(steps),
       details: diag.details,
       missing: diag.missing,
       action: diag.action,
     });
     return res.status(400).render("admin-test", {
       logs: adminTestLogs,
-      testResult: null,
+      testResult: {
+        ok: false,
+        message: "Connexion echouee.",
+        redirect: "",
+        role: "inconnu",
+        organization: "inconnue",
+        jwt: "N/A",
+        jwtDetails: "JWT non verifie car les champs sont incomplets.",
+        steps,
+      },
       testAlert: alert,
     });
   }
@@ -205,6 +343,13 @@ router.post("/admin-test", loginLimiter, async (req, res) => {
   if (!result.ok) {
     const preview = await resolveIdentityPreviewByEmail(email);
     const diag = diagnoseAdminTestFailure(result.reason, result.message, preview);
+    const steps = buildAuthSteps({
+      reason: result.reason || "auth",
+      email,
+      password,
+      preview,
+      jwtCheck: null,
+    });
     pushAdminTestLog({
       ip,
       email,
@@ -212,18 +357,31 @@ router.post("/admin-test", loginLimiter, async (req, res) => {
       reason: result.reason || "auth",
       role: preview?.role || "",
       organization: preview?.organization || "",
+      steps,
+      stepsSummary: summarizeAuthSteps(steps),
       details: diag.details,
       missing: diag.missing,
       action: diag.action,
     });
     return res.status(401).render("admin-test", {
       logs: adminTestLogs,
-      testResult: null,
+      testResult: {
+        ok: false,
+        message: "Connexion echouee.",
+        redirect: "",
+        role: preview?.role || "inconnu",
+        organization: preview?.organization || "inconnue",
+        jwt: "N/A",
+        jwtDetails: "JWT non verifie car la connexion n'a pas abouti.",
+        steps,
+      },
       testAlert: `Connexion echouee (${result.reason || "auth"}). ${diag.details}`,
     });
   }
 
   const preview = await resolveIdentityPreviewByEmail(email);
+  const jwtCheck = await summarizeSupabaseAccessJwtAfterLogin(req, res);
+  const steps = buildAuthSteps({ reason: "success", email, password, preview, jwtCheck });
   pushAdminTestLog({
     ip,
     email,
@@ -232,18 +390,31 @@ router.post("/admin-test", loginLimiter, async (req, res) => {
     role: preview?.role || "",
     organization: preview?.organization || "",
     redirect: result.redirect || "",
-    details: "Connexion admin validee.",
-    missing: "",
-    action: "Aucune action requise.",
+    jwt: jwtCheck.jwt || "",
+    steps,
+    stepsSummary: summarizeAuthSteps(steps),
+    details:
+      jwtCheck.jwt === "OK"
+        ? `Connexion admin validee. ${jwtCheck.jwtDetails || ""}`
+        : `Connexion admin validee, mais controle JWT KO : ${jwtCheck.jwtDetails || ""}`,
+    missing: jwtCheck.jwt === "OK" ? "" : "Session Supabase / JWT access_token.",
+    action:
+      jwtCheck.jwt === "OK"
+        ? "Aucune action requise."
+        : "Verifier les cookies (domaine, HTTPS, SameSite), puis redeployer si besoin.",
   });
   return res.render("admin-test", {
     logs: adminTestLogs,
     testAlert: null,
     testResult: {
+      ok: true,
       message: "Connexion reussie.",
       redirect: result.redirect || "",
       role: preview?.role || "inconnu",
       organization: preview?.organization || "inconnue",
+      jwt: jwtCheck.jwt || "",
+      jwtDetails: jwtCheck.jwtDetails || "",
+      steps,
     },
   });
 });
