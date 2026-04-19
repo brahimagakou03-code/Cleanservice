@@ -1,5 +1,7 @@
 const express = require("express");
 const rateLimit = require("express-rate-limit");
+const crypto = require("node:crypto");
+const nodemailer = require("nodemailer");
 const jwt = require("jsonwebtoken");
 const { prisma } = require("../db");
 const { clearAuthCookies, clearClientPortalCookie } = require("../utils/auth");
@@ -60,6 +62,81 @@ const loginLimiter = rateLimit({
   keyGenerator: limiterKey,
   validate: false,
 });
+
+const ADMIN_REGISTER_OTP_TTL_MS = 10 * 60 * 1000;
+const pendingStaffRegisterSignups = new Map();
+
+const registerOtpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: "Trop de demandes OTP. Reessayez dans 15 minutes.",
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: limiterKey,
+  validate: false,
+});
+
+function htmlEscape(text) {
+  return String(text || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function generateOtpCode() {
+  return String(crypto.randomInt(100000, 999999));
+}
+
+function hashRegisterOtp(email, otp) {
+  return crypto
+    .createHash("sha256")
+    .update(`${String(email || "").trim().toLowerCase()}::${String(otp || "").trim()}`)
+    .digest("hex");
+}
+
+function cleanupPendingStaffRegisterSignups() {
+  const now = Date.now();
+  for (const [id, entry] of pendingStaffRegisterSignups.entries()) {
+    if (!entry || entry.expiresAt <= now) pendingStaffRegisterSignups.delete(id);
+  }
+}
+
+function staffRegisterOtpTemplate({ firstName, otp, expiresMinutes }) {
+  const safeFirstName = htmlEscape(firstName || "Admin");
+  const safeOtp = htmlEscape(otp);
+  return {
+    subject: "Code OTP inscription administrateur",
+    html: `<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;padding:24px;">
+      <h2>Inscription administrateur</h2>
+      <p>Bonjour ${safeFirstName},</p>
+      <p>Votre code OTP est :</p>
+      <p style="font-size:28px;letter-spacing:4px;font-weight:700;background:#f3f5f8;padding:12px 16px;border-radius:8px;display:inline-block;">${safeOtp}</p>
+      <p>Ce code expire dans ${expiresMinutes} minutes.</p>
+      <p>Si vous n'etes pas a l'origine de cette demande, ignorez cet e-mail.</p>
+    </div>`,
+  };
+}
+
+async function sendStaffRegisterOtpEmail(toEmail, firstName, otp) {
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST || "127.0.0.1",
+    port: Number(process.env.SMTP_PORT || 1025),
+    secure: false,
+    auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS || "" } : undefined,
+  });
+  const mail = staffRegisterOtpTemplate({
+    firstName,
+    otp,
+    expiresMinutes: Math.round(ADMIN_REGISTER_OTP_TTL_MS / 60000),
+  });
+  await transporter.sendMail({
+    from: process.env.MAIL_FROM || "no-reply@example.invalid",
+    to: toEmail,
+    subject: mail.subject,
+    html: mail.html,
+  });
+}
 
 function isPrismaDbUnreachable(err) {
   const code = err?.code;
@@ -431,6 +508,11 @@ router.get("/register", async (req, res) => {
     registerAlert = "Merci de remplir tous les champs obligatoires.";
   } else if (err === "password") {
     registerAlert = "Mot de passe trop court (minimum 6 caracteres).";
+  } else if (err === "mismatch") {
+    registerAlert = "Les deux mots de passe ne correspondent pas.";
+  } else if (err === "otp_send") {
+    registerAlert =
+      "Le code OTP n'a pas pu etre envoye par e-mail. Verifiez SMTP_HOST / SMTP_PORT / MAIL_FROM sur l'hebergeur, puis recommencez l'inscription.";
   } else if (err === "exist") {
     registerAlert = "Cet e-mail est deja utilise. Connectez-vous ou utilisez une autre adresse.";
   } else if (err === "auth") {
@@ -446,7 +528,22 @@ router.get("/register", async (req, res) => {
   return res.render("register", { registerAlert, registerSuccess });
 });
 
-router.post("/register", async (req, res) => {
+router.get("/register/verify-otp", async (req, res) => {
+  if (await redirectIfAlreadyAuthenticated(req, res)) return;
+  const signupId = typeof req.query.sid === "string" ? req.query.sid.trim() : "";
+  const email = typeof req.query.email === "string" ? req.query.email.trim().toLowerCase() : "";
+  if (!signupId) {
+    return res.redirect(302, "/register?err=champs");
+  }
+  return res.render("register-verify-otp", {
+    signupId,
+    email,
+    error: null,
+    success: null,
+  });
+});
+
+router.post("/register", registerOtpLimiter, async (req, res) => {
   const body = mergeFormBody(req);
   const firstName = String(body.firstName || "").trim();
   const lastName = String(body.lastName || "").trim();
@@ -454,8 +551,12 @@ router.post("/register", async (req, res) => {
     .trim()
     .toLowerCase();
   const password = String(body.password || "");
-  if (!firstName || !lastName || !emailNorm || !password) {
+  const passwordConfirm = String(body.passwordConfirm || "");
+  if (!firstName || !lastName || !emailNorm || !password || !passwordConfirm) {
     return res.redirect(302, "/register?err=champs");
+  }
+  if (password !== passwordConfirm) {
+    return res.redirect(302, "/register?err=mismatch");
   }
   if (password.length < 6) {
     return res.redirect(302, "/register?err=password");
@@ -465,32 +566,91 @@ router.post("/register", async (req, res) => {
     return res.redirect(302, "/register?err=config");
   }
 
-  const authUser = await ensureStaffSupabaseAuthUser(emailNorm, password);
+  cleanupPendingStaffRegisterSignups();
+
+  const existingUser = await prisma.user.findFirst({
+    where: { email: { equals: emailNorm, mode: "insensitive" } },
+    select: { id: true },
+  });
+  if (existingUser) {
+    return res.redirect(302, "/register?err=exist");
+  }
+
+  const targetOrg =
+    (await prisma.organization.findFirst({ where: { isPlatform: true }, select: { id: true } })) ||
+    (await prisma.organization.findFirst({ select: { id: true } }));
+  if (!targetOrg) {
+    return res.redirect(302, "/register?err=org");
+  }
+
+  const otp = generateOtpCode();
+  const signupId = crypto.randomUUID();
+  pendingStaffRegisterSignups.set(signupId, {
+    payload: { firstName, lastName, email: emailNorm, password, organizationId: targetOrg.id },
+    otpHash: hashRegisterOtp(emailNorm, otp),
+    expiresAt: Date.now() + ADMIN_REGISTER_OTP_TTL_MS,
+  });
+
+  try {
+    await sendStaffRegisterOtpEmail(emailNorm, firstName, otp);
+  } catch (err) {
+    pendingStaffRegisterSignups.delete(signupId);
+    return res.redirect(302, `/register?err=otp_send`);
+  }
+
+  const q = new URLSearchParams({ sid: signupId, email: emailNorm });
+  return res.redirect(302, `/register/verify-otp?${q.toString()}`);
+});
+
+router.post("/register/verify-otp", registerOtpLimiter, async (req, res) => {
+  if (await redirectIfAlreadyAuthenticated(req, res)) return;
+  cleanupPendingStaffRegisterSignups();
+  const body = mergeFormBody(req);
+  const signupId = String(body.signupId || "").trim();
+  const otp = String(body.otp || "").trim();
+  const pending = pendingStaffRegisterSignups.get(signupId);
+  if (!pending) {
+    return res.status(400).render("register-verify-otp", {
+      signupId: "",
+      email: "",
+      error: "Session OTP expirée ou introuvable. Recommencez l'inscription.",
+      success: null,
+    });
+  }
+  if (!otp || hashRegisterOtp(pending.payload.email, otp) !== pending.otpHash) {
+    return res.status(400).render("register-verify-otp", {
+      signupId,
+      email: pending.payload.email,
+      error: "Code OTP invalide.",
+      success: null,
+    });
+  }
+
+  const { payload } = pending;
+  const authUser = await ensureStaffSupabaseAuthUser(payload.email, payload.password);
   if (!authUser.ok) {
     if (String(authUser.error || "").includes("SUPABASE_SERVICE_ROLE_KEY")) {
       return res.redirect(302, "/register?err=config");
     }
-    return res.redirect(302, "/register?err=auth");
+    return res.status(400).render("register-verify-otp", {
+      signupId,
+      email: payload.email,
+      error: `Creation du compte Auth impossible : ${authUser.error || "erreur inconnue"}`,
+      success: null,
+    });
   }
 
   try {
-    const targetOrg =
-      (await prisma.organization.findFirst({ where: { isPlatform: true }, select: { id: true } })) ||
-      (await prisma.organization.findFirst({ select: { id: true } }));
-    if (!targetOrg) {
-      return res.redirect(302, "/register?err=org");
-    }
-
     await prisma.$transaction(async (tx) => {
       await tx.user.create({
         data: {
-          email: emailNorm,
+          email: payload.email,
           passwordHash: null,
           authUid: authUser.authUid,
-          firstName,
-          lastName,
+          firstName: payload.firstName,
+          lastName: payload.lastName,
           role: Role.ADMIN,
-          organizationId: targetOrg.id,
+          organizationId: payload.organizationId,
         },
       });
     });
@@ -501,7 +661,14 @@ router.post("/register", async (req, res) => {
     if (isUniqueConstraintError(error)) {
       return res.redirect(302, "/register?err=exist");
     }
-    return res.status(400).send(`Erreur inscription: ${error.message}`);
+    return res.status(400).render("register-verify-otp", {
+      signupId,
+      email: payload.email,
+      error: `Erreur inscription: ${error.message}`,
+      success: null,
+    });
+  } finally {
+    pendingStaffRegisterSignups.delete(signupId);
   }
 
   return res.redirect(302, "/register?ok=1");

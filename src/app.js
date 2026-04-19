@@ -44,7 +44,8 @@ function urlencodedTypeMatcher(req) {
   const ct = String(req.headers["content-type"] || "").toLowerCase();
   if (ct.includes("multipart/form-data")) return false;
   if (ct.includes("application/json")) return false;
-  if (p === "/login" || p === "/register" || p === "/portal/login" || p === "/admin-test") return true;
+  if (p === "/login" || p === "/register" || p === "/register/verify-otp" || p === "/portal/login" || p === "/admin-test")
+    return true;
   if (ct.includes("application/x-www-form-urlencoded")) return true;
   if (!ct.trim()) return true;
   return false;
@@ -60,7 +61,8 @@ app.use(
       const p = req.path || "";
       const ct = String(req.headers["content-type"] || "").toLowerCase();
       if (ct.includes("multipart/form-data") || ct.includes("application/json")) return;
-      const authPost = p === "/login" || p === "/register" || p === "/portal/login" || p === "/admin-test";
+      const authPost =
+        p === "/login" || p === "/register" || p === "/register/verify-otp" || p === "/portal/login" || p === "/admin-test";
       if (!authPost && !ct.includes("application/x-www-form-urlencoded") && ct.trim()) return;
       try {
         const raw = buf.toString("utf8");
@@ -83,7 +85,15 @@ app.use(earlyMultipartBeforeCsrf);
 /** Évite un HTML d'auth mis en cache sans le Set-Cookie CSRF (CDN / Netlify). */
 app.use((req, res, next) => {
   const p = req.path || "";
-  if (req.method === "GET" && (p === "/" || p === "/login" || p === "/register" || p === "/portal/login" || p === "/admin-test")) {
+  if (
+    req.method === "GET" &&
+    (p === "/" ||
+      p === "/login" ||
+      p === "/register" ||
+      p === "/register/verify-otp" ||
+      p === "/portal/login" ||
+      p === "/admin-test")
+  ) {
     res.setHeader("Cache-Control", "private, no-store, no-cache, must-revalidate");
     res.setHeader("Pragma", "no-cache");
   }

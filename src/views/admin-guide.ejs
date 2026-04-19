@@ -80,6 +80,10 @@
           Diagnostic technique (équipe IT) : la page <code>/admin-test</code> permet de simuler une connexion et d’afficher des logs.
           Après un test réussi, une colonne <strong>JWT</strong> indique si le jeton d’accès <strong>Supabase Auth</strong> est présent et encore valide (expiration) ; le détail complet figure dans la colonne <em>Détails</em> du tableau.
         </p>
+        <p class="small text-muted mb-0 mt-2">
+          Inscription administrateur publique (<code>/register</code>) : après saisie du formulaire, un <strong>code OTP par e-mail</strong> est demandé sur <code>/register/verify-otp</code>.
+          Le compte n’est créé dans la base qu’après validation du code ; le mot de passe doit être saisi <strong>deux fois</strong> sur le formulaire d’inscription.
+        </p>
       </section>
 
       <section id="dashboard" class="mb-5">
