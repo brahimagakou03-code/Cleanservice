@@ -35,7 +35,7 @@ app.use("/branding", express.static(path.join(process.cwd(), "public", "branding
 app.use("/uploads", express.static(path.join(process.cwd(), "public", "uploads")));
 app.use("/invoices", express.static(path.join(process.cwd(), "public", "invoices")));
 /**
- * POST formulaires : sur Netlify, Content-Type peut être absent ou exotique pour /login, /register, /portal/login, /admin-test.
+ * POST formulaires : sur Netlify, Content-Type peut être absent ou exotique pour /admin/login, /super-admin/login, /register, /portal/login, /admin-test.
  * Pour ces routes, on force le parsing x-www-form-urlencoded (sauf multipart / json).
  */
 function urlencodedTypeMatcher(req) {
@@ -44,7 +44,15 @@ function urlencodedTypeMatcher(req) {
   const ct = String(req.headers["content-type"] || "").toLowerCase();
   if (ct.includes("multipart/form-data")) return false;
   if (ct.includes("application/json")) return false;
-  if (p === "/login" || p === "/register" || p === "/register/verify-otp" || p === "/portal/login" || p === "/admin-test")
+  if (
+    p === "/login" ||
+    p === "/admin/login" ||
+    p === "/super-admin/login" ||
+    p === "/register" ||
+    p === "/register/verify-otp" ||
+    p === "/portal/login" ||
+    p === "/admin-test"
+  )
     return true;
   if (ct.includes("application/x-www-form-urlencoded")) return true;
   if (!ct.trim()) return true;
@@ -62,7 +70,13 @@ app.use(
       const ct = String(req.headers["content-type"] || "").toLowerCase();
       if (ct.includes("multipart/form-data") || ct.includes("application/json")) return;
       const authPost =
-        p === "/login" || p === "/register" || p === "/register/verify-otp" || p === "/portal/login" || p === "/admin-test";
+        p === "/login" ||
+        p === "/admin/login" ||
+        p === "/super-admin/login" ||
+        p === "/register" ||
+        p === "/register/verify-otp" ||
+        p === "/portal/login" ||
+        p === "/admin-test";
       if (!authPost && !ct.includes("application/x-www-form-urlencoded") && ct.trim()) return;
       try {
         const raw = buf.toString("utf8");
@@ -89,6 +103,8 @@ app.use((req, res, next) => {
     req.method === "GET" &&
     (p === "/" ||
       p === "/login" ||
+      p === "/admin/login" ||
+      p === "/super-admin/login" ||
       p === "/register" ||
       p === "/register/verify-otp" ||
       p === "/portal/login" ||

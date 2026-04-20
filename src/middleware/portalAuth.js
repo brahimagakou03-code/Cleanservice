@@ -1,24 +1,22 @@
 const { prisma, requestContext } = require("../db");
 const { createSupabaseRouteClient } = require("../utils/supabaseExpress");
-const { resolveAppIdentity } = require("../utils/supabaseAuth");
+const { resolveAppAccessProfiles } = require("../utils/supabaseAuth");
 
 async function requireClientPortalAuth(req, res, next) {
   try {
     const supabase = createSupabaseRouteClient(req, res);
     const { data, error } = await supabase.auth.getUser();
     if (error || !data?.user) {
-      return res.redirect("/login?from=portal");
+      return res.redirect("/portal/login");
     }
-    const identity = await resolveAppIdentity(data.user);
-    if (!identity || identity.kind !== "portal") {
-      if (identity?.kind === "staff") {
-        return res.redirect("/dashboard");
-      }
-      return res.redirect("/login?from=portal");
+    const access = await resolveAppAccessProfiles(data.user);
+    if (!access.customer) {
+      if (access.staff) return res.redirect("/dashboard");
+      return res.redirect("/portal/login");
     }
-    const customer = await prisma.customer.findUnique({ where: { id: identity.customer.id } });
+    const customer = await prisma.customer.findUnique({ where: { id: access.customer.id } });
     if (!customer || !customer.isActive) {
-      return res.redirect("/login?from=portal");
+      return res.redirect("/portal/login");
     }
     req.portalCustomer = customer;
     return requestContext.run(
@@ -26,7 +24,7 @@ async function requireClientPortalAuth(req, res, next) {
       () => next()
     );
   } catch (_) {
-    return res.redirect("/login?from=portal");
+    return res.redirect("/portal/login");
   }
 }
 

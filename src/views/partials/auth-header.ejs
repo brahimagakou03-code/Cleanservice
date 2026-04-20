@@ -6,9 +6,10 @@
     </a>
     <div class="navbar-nav ms-auto flex-row gap-2 align-items-center">
       <% if (headerMode === "staff") { %>
-        <a class="nav-link cs-link py-1" href="/login?from=portal">Espace client</a>
+        <a class="nav-link cs-link py-1" href="/portal/login">Espace client</a>
+        <a class="nav-link cs-link py-1" href="/super-admin/login">Super admin</a>
       <% } else if (headerMode === "portal") { %>
-        <a class="nav-link cs-link py-1" href="/login">Connexion</a>
+        <a class="nav-link cs-link py-1" href="/admin/login">Admin siège</a>
       <% } %>
     </div>
   </div>

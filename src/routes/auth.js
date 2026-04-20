@@ -8,40 +8,68 @@ const { clearAuthCookies, clearClientPortalCookie } = require("../utils/auth");
 const { Role } = require("../utils/rbac");
 const { mergeFormBody } = require("../utils/mergeFormBody");
 const { createSupabaseRouteClient, isSupabaseAuthConfigured } = require("../utils/supabaseExpress");
-const { resolveAppIdentity, ensureStaffSupabaseAuthUser } = require("../utils/supabaseAuth");
+const { resolveAppAccessProfiles, ensureStaffSupabaseAuthUser } = require("../utils/supabaseAuth");
 const { performUnifiedLogin } = require("../services/unifiedLogin");
 
 const router = express.Router();
 const MAX_ADMIN_TEST_LOGS = 300;
 const adminTestLogs = [];
 
-async function redirectIfAlreadyAuthenticated(req, res) {
+async function redirectIfAlreadyAuthenticated(req, res, targetPortal = "auto") {
   if (!isSupabaseAuthConfigured()) return false;
   try {
     const supabase = createSupabaseRouteClient(req, res);
     const { data, error } = await supabase.auth.getUser();
     if (error || !data?.user) return false;
-    const identity = await resolveAppIdentity(data.user);
-    if (identity?.kind === "staff") {
-      const u = await prisma.user.findUnique({
-        where: { id: identity.user.id },
-        include: { organization: true },
-      });
-      let path = "/dashboard";
-      if (u?.organization?.isPlatform === true && u.role === Role.PLATFORM_ADMIN) {
-        path = "/dashboard/platform";
-      }
-      res.redirect(path);
-      return true;
-    }
-    if (identity?.kind === "portal") {
-      res.redirect("/portal");
-      return true;
+    const access = await resolveAppAccessProfiles(data.user);
+    const target = String(targetPortal || "auto");
+    const canSuperAdmin =
+      Boolean(access.staff) &&
+      access.staff.organization?.isPlatform === true &&
+      access.staff.role === Role.PLATFORM_ADMIN;
+    const canAdmin = Boolean(access.staff);
+    const canClient = Boolean(access.customer);
+    if (target === "superadmin" && canSuperAdmin) return res.redirect("/dashboard/platform"), true;
+    if (target === "admin" && canAdmin) return res.redirect("/dashboard"), true;
+    if (target === "client" && canClient) return res.redirect("/portal"), true;
+    if (target === "auto") {
+      if (canSuperAdmin) return res.redirect("/dashboard/platform"), true;
+      if (canAdmin) return res.redirect("/dashboard"), true;
+      if (canClient) return res.redirect("/portal"), true;
     }
   } catch (_) {
     /* ignore */
   }
   return false;
+}
+
+function loginAlertFromErr(err) {
+  if (!isSupabaseAuthConfigured()) {
+    return "L’authentification nécessite Supabase : sur Netlify, ouvrez Site configuration → Environment variables et ajoutez SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY (et DATABASE_URL pour la base). Les deux premières se trouvent dans Supabase → Project Settings → API. Enregistrez puis lancez un nouveau déploiement.";
+  }
+  if (err === "config") {
+    return "Variables Supabase incomplètes ou invalides. Vérifiez SUPABASE_URL et SUPABASE_ANON_KEY sur l’hébergeur, puis redéployez.";
+  }
+  if (err === "champs") {
+    return "Merci de remplir l’e-mail et le mot de passe. Si le problème persiste, rechargez la page (Ctrl+F5) puis réessayez.";
+  }
+  if (err === "auth") return "E-mail ou mot de passe incorrect.";
+  if (err === "noprofile") {
+    return "Aucun profil équipe ou client n’est lié à ce compte Supabase. Contactez votre administrateur ou utilisez l’e-mail enregistré chez votre fournisseur.";
+  }
+  if (err === "forbidden_portal") {
+    return "Ce compte est actif, mais n'a pas les droits pour ce portail. Utilisez l'URL d'un portail autorisé.";
+  }
+  if (err === "provision") {
+    return "La migration du compte vers Supabase a échoué. Vérifiez SUPABASE_SERVICE_ROLE_KEY côté serveur.";
+  }
+  if (err === "code_court") {
+    return "Identifiants portail trop courts (minimum 6 caractères côté Supabase). Utilisez le mot de passe reçu par e-mail.";
+  }
+  if (err === "db") {
+    return "La base de données ne répond pas depuis Netlify. À faire : (1) Supabase → réveillez le projet s’il est en pause. (2) Netlify → Environment variables → DATABASE_URL : copiez l’URI « Transaction pooler » (port 6543) depuis Supabase → Connect → Connection strings (pas l’hôte db…:5432 seul). (3) Mot de passe avec @ # etc. : encodez-le dans l’URL (%40, %23…). (4) Redéployez le site après modification.";
+  }
+  return null;
 }
 
 function limiterKey(req) {
@@ -683,71 +711,72 @@ router.post("/register/verify-otp", registerOtpLimiter, async (req, res) => {
   return res.redirect(302, "/register?ok=1");
 });
 
-router.get("/login", async (req, res) => {
-  if (await redirectIfAlreadyAuthenticated(req, res)) return;
+async function renderStaffLoginPage(req, res, portalTarget, pageTitle, pageSubtitle) {
+  if (await redirectIfAlreadyAuthenticated(req, res, portalTarget)) return;
   const err = typeof req.query.err === "string" ? req.query.err : "";
-  const from = typeof req.query.from === "string" ? req.query.from : "";
-  let loginAlert = null;
+  return res.render("login", {
+    loginAlert: loginAlertFromErr(err),
+    pageTitle,
+    pageSubtitle,
+    loginAction: portalTarget === "superadmin" ? "/super-admin/login" : "/admin/login",
+  });
+}
 
-  if (!isSupabaseAuthConfigured()) {
-    loginAlert =
-      "L’authentification nécessite Supabase : sur Netlify, ouvrez Site configuration → Environment variables et ajoutez SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY (et DATABASE_URL pour la base). Les deux premières se trouvent dans Supabase → Project Settings → API. Enregistrez puis lancez un nouveau déploiement.";
-  } else if (err === "config") {
-    loginAlert =
-      "Variables Supabase incomplètes ou invalides. Vérifiez SUPABASE_URL et SUPABASE_ANON_KEY sur l’hébergeur, puis redéployez.";
-  } else if (err === "champs") {
-    loginAlert =
-      "Merci de remplir l’e-mail et le mot de passe. Si le problème persiste, rechargez la page (Ctrl+F5) puis réessayez.";
-  } else if (err === "auth") {
-    loginAlert = "E-mail ou mot de passe incorrect.";
-  } else if (err === "noprofile") {
-    loginAlert =
-      "Aucun profil équipe ou client n’est lié à ce compte Supabase. Contactez votre administrateur ou utilisez l’e-mail enregistré chez votre fournisseur.";
-  } else if (err === "provision") {
-    loginAlert = "La migration du compte vers Supabase a échoué. Vérifiez SUPABASE_SERVICE_ROLE_KEY côté serveur.";
-  } else if (err === "code_court") {
-    loginAlert =
-      "Identifiants portail trop courts (minimum 6 caractères côté Supabase). Utilisez le mot de passe reçu par e-mail.";
-  } else if (err === "db") {
-    loginAlert =
-      "La base de données ne répond pas depuis Netlify. À faire : (1) Supabase → réveillez le projet s’il est en pause. (2) Netlify → Environment variables → DATABASE_URL : copiez l’URI « Transaction pooler » (port 6543) depuis Supabase → Connect → Connection strings (pas l’hôte db…:5432 seul). (3) Mot de passe avec @ # etc. : encodez-le dans l’URL (%40, %23…). (4) Redéployez le site après modification.";
-  }
-  return res.render("login", { loginAlert, fromPortal: from === "portal" });
-});
-
-router.post("/login", loginLimiter, async (req, res) => {
+async function handleStaffPortalLogin(req, res, portalTarget, errorBasePath) {
   const body = mergeFormBody(req);
   const email = String(body.email || "").trim().toLowerCase();
   const password = String(body.password || "");
   const code = String(body.code || "");
   if (!email || (!password && !code)) {
-    return res.redirect(302, "/login?err=champs");
+    return res.redirect(302, `${errorBasePath}?err=champs`);
   }
 
-  const result = await performUnifiedLogin(req, res, { email, password, code });
+  const result = await performUnifiedLogin(req, res, { email, password, code, targetPortal: portalTarget });
   if (!result.ok) {
-    if (result.reason === "champs") {
-      return res.redirect(302, "/login?err=champs");
-    }
-    if (result.reason === "config") {
-      return res.redirect(302, "/login?err=config");
-    }
-    if (result.reason === "provision") {
-      return res.redirect(302, "/login?err=provision");
-    }
-    if (result.reason === "code_court") {
-      return res.redirect(302, "/login?err=code_court");
-    }
-    if (result.reason === "noprofile") {
-      return res.redirect(302, "/login?err=noprofile");
-    }
-    if (result.reason === "db") {
-      return res.redirect(302, "/login?err=db");
-    }
-    return res.redirect(302, "/login?err=auth");
+    const reason = [
+      "champs",
+      "config",
+      "provision",
+      "code_court",
+      "noprofile",
+      "db",
+      "forbidden_portal",
+    ].includes(result.reason)
+      ? result.reason
+      : "auth";
+    return res.redirect(302, `${errorBasePath}?err=${encodeURIComponent(reason)}`);
   }
-
   return res.redirect(302, result.redirect);
+}
+
+router.get("/login", (_req, res) => res.redirect(302, "/admin/login"));
+
+router.get("/admin/login", async (req, res) => {
+  return renderStaffLoginPage(
+    req,
+    res,
+    "admin",
+    "Connexion admin siège",
+    "Accès au portail administration (équipes internes et magasins)."
+  );
+});
+
+router.post("/admin/login", loginLimiter, async (req, res) => {
+  return handleStaffPortalLogin(req, res, "admin", "/admin/login");
+});
+
+router.get("/super-admin/login", async (req, res) => {
+  return renderStaffLoginPage(
+    req,
+    res,
+    "superadmin",
+    "Connexion super admin",
+    "Accès réservé à l'administration plateforme Clean Service."
+  );
+});
+
+router.post("/super-admin/login", loginLimiter, async (req, res) => {
+  return handleStaffPortalLogin(req, res, "superadmin", "/super-admin/login");
 });
 
 router.post("/logout", async (req, res) => {

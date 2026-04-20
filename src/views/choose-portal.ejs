@@ -12,15 +12,29 @@
   <div class="container py-5">
     <div class="text-center mb-5">
       <img src="<%= typeof platformLogoUrl !== 'undefined' ? platformLogoUrl : '/branding/logo.png' %>" alt="Clean Service" class="cs-logo-hero">
-      <h1 class="h3 mt-4">Accès plateforme</h1>
-      <p class="cs-subtle">Authentification unique (Supabase) puis redirection automatique.</p>
+      <h1 class="h3 mt-4">Choisir votre portail</h1>
+      <p class="cs-subtle">Chaque URL ouvre un portail dédié avec contrôle des droits.</p>
     </div>
     <div class="row g-4 justify-content-center">
-      <div class="col-md-6">
+      <div class="col-md-4">
         <div class="card p-4 text-center h-100">
-          <h2 class="h5">Connexion unique</h2>
-          <p class="small text-muted mb-3">Même page pour l’équipe et les clients : après authentification Supabase, vous accédez au tableau de bord ou au portail selon votre profil.</p>
-          <a class="btn btn-primary mt-2" href="/login">Se connecter</a>
+          <h2 class="h5">Super admin</h2>
+          <p class="small text-muted mb-3">Administration plateforme Clean Service (rôle plateforme requis).</p>
+          <a class="btn btn-dark mt-2" href="/super-admin/login">Accès super admin</a>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card p-4 text-center h-100">
+          <h2 class="h5">Admin siège</h2>
+          <p class="small text-muted mb-3">Portail administration (équipe interne et opérationnelle selon droits).</p>
+          <a class="btn btn-primary mt-2" href="/admin/login">Accès admin siège</a>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card p-4 text-center h-100">
+          <h2 class="h5">Client</h2>
+          <p class="small text-muted mb-3">Portail commandes client, réservé aux comptes client actifs.</p>
+          <a class="btn btn-outline-primary mt-2" href="/portal/login">Accès client</a>
           <a class="btn btn-outline-secondary mt-2" href="/admin-test">Tester une connexion admin</a>
         </div>
       </div>

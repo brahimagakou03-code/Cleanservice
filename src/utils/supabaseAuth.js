@@ -12,61 +12,77 @@ function emailMatchesInsensitive(emailLower) {
  * Resynchronise authUid si l’e-mail correspond mais l’UUID Auth a changé (recréation côté Supabase).
  */
 async function resolveAppIdentity(supabaseUser) {
-  if (!supabaseUser?.id || !supabaseUser.email) return null;
-  const email = String(supabaseUser.email).trim().toLowerCase();
+  const access = await resolveAppAccessProfiles(supabaseUser);
+  if (access.staff) return { kind: "staff", user: access.staff };
+  if (access.customer) return { kind: "portal", customer: access.customer };
+  return null;
+}
 
+async function resolveActiveStaff(supabaseUserId, email) {
   const staffByUid = await prisma.user.findFirst({
-    where: { isActive: true, authUid: supabaseUser.id },
+    where: { isActive: true, authUid: supabaseUserId },
     include: { organization: true },
   });
-  if (staffByUid) return { kind: "staff", user: staffByUid };
+  if (staffByUid) return staffByUid;
 
   const staffByEmail = await prisma.user.findFirst({
     where: { isActive: true, email: emailMatchesInsensitive(email), authUid: null },
     include: { organization: true },
   });
   if (staffByEmail) {
-    await prisma.user.update({ where: { id: staffByEmail.id }, data: { authUid: supabaseUser.id } });
-    return { kind: "staff", user: { ...staffByEmail, authUid: supabaseUser.id } };
+    await prisma.user.update({ where: { id: staffByEmail.id }, data: { authUid: supabaseUserId } });
+    return { ...staffByEmail, authUid: supabaseUserId };
   }
 
   const staffStaleAuth = await prisma.user.findFirst({
     where: { isActive: true, email: emailMatchesInsensitive(email), authUid: { not: null } },
     include: { organization: true },
   });
-  if (staffStaleAuth && staffStaleAuth.authUid !== supabaseUser.id) {
+  if (staffStaleAuth && staffStaleAuth.authUid !== supabaseUserId) {
     await prisma.user.update({
       where: { id: staffStaleAuth.id },
-      data: { authUid: supabaseUser.id },
+      data: { authUid: supabaseUserId },
     });
-    return { kind: "staff", user: { ...staffStaleAuth, authUid: supabaseUser.id } };
+    return { ...staffStaleAuth, authUid: supabaseUserId };
   }
+  return null;
+}
 
+async function resolveActiveCustomer(supabaseUserId, email) {
   const custByUid = await prisma.customer.findFirst({
-    where: { isActive: true, authUid: supabaseUser.id },
+    where: { isActive: true, authUid: supabaseUserId },
   });
-  if (custByUid) return { kind: "portal", customer: custByUid };
+  if (custByUid) return custByUid;
 
   const custByEmail = await prisma.customer.findFirst({
     where: { isActive: true, email: emailMatchesInsensitive(email), authUid: null },
   });
   if (custByEmail) {
-    await prisma.customer.update({ where: { id: custByEmail.id }, data: { authUid: supabaseUser.id } });
-    return { kind: "portal", customer: { ...custByEmail, authUid: supabaseUser.id } };
+    await prisma.customer.update({ where: { id: custByEmail.id }, data: { authUid: supabaseUserId } });
+    return { ...custByEmail, authUid: supabaseUserId };
   }
 
   const custStaleAuth = await prisma.customer.findFirst({
     where: { isActive: true, email: emailMatchesInsensitive(email), authUid: { not: null } },
   });
-  if (custStaleAuth && custStaleAuth.authUid !== supabaseUser.id) {
+  if (custStaleAuth && custStaleAuth.authUid !== supabaseUserId) {
     await prisma.customer.update({
       where: { id: custStaleAuth.id },
-      data: { authUid: supabaseUser.id },
+      data: { authUid: supabaseUserId },
     });
-    return { kind: "portal", customer: { ...custStaleAuth, authUid: supabaseUser.id } };
+    return { ...custStaleAuth, authUid: supabaseUserId };
   }
-
   return null;
+}
+
+async function resolveAppAccessProfiles(supabaseUser) {
+  if (!supabaseUser?.id || !supabaseUser.email) return { staff: null, customer: null };
+  const email = String(supabaseUser.email).trim().toLowerCase();
+  const [staff, customer] = await Promise.all([
+    resolveActiveStaff(supabaseUser.id, email),
+    resolveActiveCustomer(supabaseUser.id, email),
+  ]);
+  return { staff, customer };
 }
 
 function isAlreadyRegisteredError(err) {
@@ -170,6 +186,7 @@ async function ensureStaffSupabaseAuthUser(email, plainPassword) {
 
 module.exports = {
   resolveAppIdentity,
+  resolveAppAccessProfiles,
   ensureCustomerSupabaseAuthUser,
   ensureStaffSupabaseAuthUser,
   isAlreadyRegisteredError,

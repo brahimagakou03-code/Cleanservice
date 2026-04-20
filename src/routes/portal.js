@@ -230,7 +230,23 @@ function validateAdminSignupPayload(payload) {
   return null;
 }
 
-router.get("/login", (_req, res) => res.redirect(302, "/login?from=portal"));
+function portalLoginErrorMessage(err) {
+  const code = String(err || "");
+  if (code === "champs") return "Merci de saisir votre e-mail puis votre mot de passe ou code client.";
+  if (code === "forbidden_portal") {
+    return "Votre compte est actif mais n'a pas de droit d'accès au portail client.";
+  }
+  if (code === "noprofile") return "Aucun profil client actif n'est lié à ce compte.";
+  if (code === "code_court") return "Code client trop court pour Supabase. Utilisez plutôt votre mot de passe.";
+  return "Connexion impossible. Vérifiez vos identifiants.";
+}
+
+router.get("/login", async (req, res) => {
+  const err = typeof req.query.err === "string" ? req.query.err : "";
+  return res.render("portal-login", {
+    loginError: portalLoginErrorMessage(err),
+  });
+});
 
 router.get("/register-admin", (_req, res) => {
   return res.render("portal-register-admin", {
@@ -401,17 +417,18 @@ router.post("/login", portalLoginLimiter, async (req, res) => {
   const password = String(body.password || "");
   const code = String(body.code || "");
   if (!email || (!password && !code)) {
-    return res.redirect(302, "/login?from=portal&err=champs");
+    return res.redirect(302, "/portal/login?err=champs");
   }
-  const result = await performUnifiedLogin(req, res, { email, password, code });
+  const result = await performUnifiedLogin(req, res, { email, password, code, targetPortal: "client" });
   if (!result.ok) {
-    const q = new URLSearchParams({ from: "portal" });
+    const q = new URLSearchParams();
     if (result.reason === "champs") q.set("err", "champs");
     else if (result.reason === "provision") q.set("err", "provision");
     else if (result.reason === "code_court") q.set("err", "code_court");
     else if (result.reason === "noprofile") q.set("err", "noprofile");
+    else if (result.reason === "forbidden_portal") q.set("err", "forbidden_portal");
     else q.set("err", "auth");
-    return res.redirect(302, `/login?${q.toString()}`);
+    return res.redirect(302, `/portal/login?${q.toString()}`);
   }
   return res.redirect(302, result.redirect);
 });

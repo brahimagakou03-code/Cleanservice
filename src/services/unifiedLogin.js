@@ -4,6 +4,7 @@ const { comparePassword } = require("../utils/auth");
 const { createSupabaseRouteClient } = require("../utils/supabaseExpress");
 const {
   resolveAppIdentity,
+  resolveAppAccessProfiles,
   ensureCustomerSupabaseAuthUser,
   ensureStaffSupabaseAuthUser,
 } = require("../utils/supabaseAuth");
@@ -48,17 +49,49 @@ function isPrismaDbUnreachable(err) {
  * Connexion unique (Supabase Auth) : e-mail + mot de passe ; code client optionnel (héritage).
  * @returns {{ ok: true, redirect: string } | { ok: false, reason: string }}
  */
-async function performUnifiedLogin(req, res, { email, password, code }) {
+function normalizeTargetPortal(targetPortal) {
+  const p = String(targetPortal || "auto").trim().toLowerCase();
+  if (p === "superadmin" || p === "admin" || p === "client") return p;
+  return "auto";
+}
+
+function canAccessTargetPortal(access, targetPortal) {
+  const staff = access?.staff || null;
+  const customer = access?.customer || null;
+  if (targetPortal === "auto") return Boolean(staff || customer);
+  if (targetPortal === "client") return Boolean(customer);
+  if (targetPortal === "admin") return Boolean(staff);
+  if (targetPortal === "superadmin") {
+    return Boolean(staff && staff.organization?.isPlatform === true && staff.role === Role.PLATFORM_ADMIN);
+  }
+  return false;
+}
+
+function redirectForTargetPortal(access, targetPortal) {
+  if (targetPortal === "client") return "/portal";
+  if (targetPortal === "superadmin") return "/dashboard/platform";
+  if (targetPortal === "admin") return "/dashboard";
+  if (access.staff) {
+    if (access.staff.organization?.isPlatform === true && access.staff.role === Role.PLATFORM_ADMIN) {
+      return "/dashboard/platform";
+    }
+    return "/dashboard";
+  }
+  return "/portal";
+}
+
+async function performUnifiedLogin(req, res, { email, password, code, targetPortal }) {
   const em = String(email || "").trim().toLowerCase();
   const pwd = String(password || "");
   const cod = String(code || "");
+  const target = normalizeTargetPortal(targetPortal);
 
   if (!em || (!pwd && !cod)) {
     return { ok: false, reason: "champs" };
   }
 
   try {
-    return await performUnifiedLoginInner(req, res, { email: em, password: pwd, code: cod });
+    return await performUnifiedLoginInner(req, res, { email: em, password: pwd, code: cod, targetPortal: target });
   } catch (e) {
     if (isPrismaDbUnreachable(e)) {
       return { ok: false, reason: "db", message: e.message };
@@ -67,7 +100,7 @@ async function performUnifiedLogin(req, res, { email, password, code }) {
   }
 }
 
-async function performUnifiedLoginInner(req, res, { email: em, password: pwd, code: cod }) {
+async function performUnifiedLoginInner(req, res, { email: em, password: pwd, code: cod, targetPortal }) {
   let supabase;
   try {
     supabase = createSupabaseRouteClient(req, res);
@@ -150,20 +183,19 @@ async function performUnifiedLoginInner(req, res, { email: em, password: pwd, co
     return { ok: false, reason: "noprofile" };
   }
 
+  const access = await resolveAppAccessProfiles(user);
+  if (!canAccessTargetPortal(access, targetPortal)) {
+    await supabase.auth.signOut();
+    return { ok: false, reason: "forbidden_portal" };
+  }
+
   if (identity.kind === "staff") {
     await prisma.user.update({ where: { id: identity.user.id }, data: { lastLoginAt: new Date() } });
-    const u = await prisma.user.findUnique({
-      where: { id: identity.user.id },
-      include: { organization: true },
-    });
-    let redirect = "/dashboard";
-    if (u?.organization?.isPlatform === true && u.role === Role.PLATFORM_ADMIN) {
-      redirect = "/dashboard/platform";
-    }
+    const redirect = redirectForTargetPortal(access, targetPortal);
     return { ok: true, redirect };
   }
 
-  return { ok: true, redirect: "/portal" };
+  return { ok: true, redirect: redirectForTargetPortal(access, targetPortal) };
 }
 
 module.exports = { performUnifiedLogin, portalCredentialsValid, codesMatch };
