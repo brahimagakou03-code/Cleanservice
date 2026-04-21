@@ -4,7 +4,11 @@ const { can, Role } = require("../utils/rbac");
 const { enqueueEmail } = require("../utils/emailQueue");
 const { teamInvitationTemplate } = require("../utils/emailTemplates");
 const { createSupabaseServiceClient } = require("../lib/supabase");
-const { inviteStaffSupabaseUser, getAppBaseUrl, isAlreadyRegisteredError } = require("../utils/supabaseAuth");
+const {
+  inviteStaffSupabaseUser,
+  getAppBaseUrl,
+  isAlreadyRegisteredError,
+} = require("../utils/supabaseAuth");
 const { orderStatusLabel } = require("../middleware/i18nFr");
 const { canApprove, STATUS: ORDER_STATUS } = require("../utils/orders");
 
@@ -74,11 +78,6 @@ function platformUsersAlertFromQuery(req) {
   return null;
 }
 
-function getAssignableShopRolesForPlatform() {
-  // Accès boutique: on exclut OWNER pour éviter une élévation trop large depuis le siège.
-  return getAssignableTenantRoles(Role.OWNER).filter((r) => r !== Role.OWNER);
-}
-
 router.get("/platform", requirePlatformAdmin, (_req, res) => {
   res.redirect("/dashboard/platform/organizations");
 });
@@ -108,14 +107,8 @@ router.get("/platform/users", requirePlatformAdmin, async (req, res) => {
       prisma.user.findMany({
         where: { organization: { isPlatform: false } },
         include: { organization: true },
-        orderBy: [{ organization: { name: "asc" } }, { createdAt: "asc" }],
-      }),
-    ),
-    withSkipTenant(() =>
-      prisma.organization.findMany({
-        where: { isPlatform: false },
-        orderBy: { name: "asc" },
-        select: { id: true, name: true, slug: true },
+        orderBy: [{ organization: { name: "asc" } }, { createdAt: "desc" }],
+        take: 200,
       }),
     ),
   ]);
@@ -125,7 +118,6 @@ router.get("/platform/users", requirePlatformAdmin, async (req, res) => {
     shopAccessUsers,
     organizations,
     assignableRoles: getAssignablePlatformRoles(),
-    shopAssignableRoles: getAssignableShopRolesForPlatform(),
     isPlatformContext: true,
     teamAlert: flash?.type === "warning" ? flash.text : null,
     teamSuccess: flash?.type === "success" ? flash.text : null,
@@ -327,72 +319,21 @@ router.post("/platform/shop-admins/create", requirePlatformAdmin, async (req, re
   return res.redirect("/dashboard/platform/users?ok=shop_created");
 });
 
-router.post("/platform/shop-admins/:id/delete", requirePlatformAdmin, async (req, res) => {
-  const target = await withSkipTenant(() =>
-    prisma.user.findFirst({
-      where: { id: req.params.id },
-      include: { organization: true },
-    }),
-  );
-  if (!target || target.organization?.isPlatform) {
-    return res.redirect("/dashboard/platform/users?err=not_found");
-  }
-  try {
-    await withSkipTenant(() => prisma.user.delete({ where: { id: target.id } }));
-  } catch (_) {
-    return res.redirect("/dashboard/platform/users?err=delete");
-  }
-  return res.redirect("/dashboard/platform/users?ok=shop_deleted");
-});
-
 router.post("/platform/users/:id/role", requirePlatformAdmin, async (req, res) => {
-  const role = String(req.body?.role || "").trim();
-  const organizationId = String(req.body?.organizationId || "").trim();
-  const platformRoles = getAssignablePlatformRoles();
-  const shopRoles = getAssignableShopRolesForPlatform();
-  const target = await withSkipTenant(() =>
-    prisma.user.findFirst({ where: { id: req.params.id } }),
-  );
-  if (!target) {
-    return res.redirect("/dashboard/platform/users?err=not_found");
-  }
-
-  if (platformRoles.includes(role)) {
-    await withSkipTenant(() =>
-      prisma.user.update({
-        where: { id: target.id },
-        data: { role, organizationId: req.user.organizationId },
-      }),
-    );
-    return res.redirect("/dashboard/platform/users?ok=platform_updated");
-  }
-
-  if (!shopRoles.includes(role)) {
+  const { role } = req.body;
+  const allowed = getAssignablePlatformRoles();
+  if (!allowed.includes(role)) {
     return res.redirect("/dashboard/platform/users?err=invalid_role");
   }
-  if (!organizationId) {
-    return res.redirect("/dashboard/platform/users?err=org");
+  const target = await prisma.user.findFirst({ where: { id: req.params.id } });
+  if (!target || target.organizationId !== req.user.organizationId) {
+    return res.redirect("/dashboard/platform/users?err=not_found");
   }
-  if (target.id === req.user.sub) {
+  if (target.id === req.user.sub && role !== Role.PLATFORM_ADMIN) {
     return res.redirect("/dashboard/platform/users?err=self_demote");
   }
-
-  const org = await withSkipTenant(() =>
-    prisma.organization.findFirst({
-      where: { id: organizationId, isPlatform: false },
-      select: { id: true },
-    }),
-  );
-  if (!org) {
-    return res.redirect("/dashboard/platform/users?err=org");
-  }
-  await withSkipTenant(() =>
-    prisma.user.update({
-      where: { id: target.id },
-      data: { role, organizationId: org.id },
-    }),
-  );
-  return res.redirect("/dashboard/platform/users");
+  await prisma.user.update({ where: { id: target.id }, data: { role } });
+  return res.redirect("/dashboard/platform/users?ok=platform_updated");
 });
 
 router.post("/platform/users/:id/toggle-active", requirePlatformAdmin, async (req, res) => {

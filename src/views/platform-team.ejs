@@ -62,38 +62,6 @@
   </div>
 
   <div class="card cs-tool-card mb-4">
-    <div class="card-header">Inviter un administrateur plateforme</div>
-    <div class="card-body">
-      <form method="POST" action="/dashboard/platform/users/invite" class="row g-3 align-items-end">
-        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-        <div class="col-md-4">
-          <label class="form-label small fw-semibold">E-mail <span class="text-danger">*</span></label>
-          <input class="form-control" type="email" name="email" required placeholder="admin@clean-service.fr" />
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small fw-semibold">Prénom</label>
-          <input class="form-control" name="firstName" placeholder="Prénom" />
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small fw-semibold">Nom</label>
-          <input class="form-control" name="lastName" placeholder="Nom" />
-        </div>
-        <div class="col-md-2">
-          <label class="form-label small fw-semibold">Rôle</label>
-          <select class="form-select" name="role">
-            <% (assignableRoles || []).forEach(function(r) { %>
-              <option value="<%= r %>"><%= fr.role(r) %></option>
-            <% }) %>
-          </select>
-        </div>
-        <div class="col-12">
-          <button type="submit" class="btn btn-primary">Envoyer l’invitation</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <div class="card cs-tool-card mb-4">
     <div class="card-header">Créer un accès admin boutique</div>
     <div class="card-body">
       <form method="POST" action="/dashboard/platform/shop-admins/create" class="row g-3 align-items-end">
@@ -157,22 +125,9 @@
                 <td>
                   <form method="POST" action="/dashboard/platform/users/<%= m.id %>/role" class="d-flex flex-wrap align-items-center gap-2">
                     <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-                    <select class="form-select form-select-sm" name="role" style="max-width:16rem">
-                      <optgroup label="Rôles siège">
+                    <select class="form-select form-select-sm" name="role" style="max-width:14rem">
                       <% (assignableRoles || []).forEach(function(r) { %>
                         <option value="<%= r %>" <%= m.role === r ? "selected" : "" %>><%= fr.role(r) %></option>
-                      <% }) %>
-                      </optgroup>
-                      <optgroup label="Rôles boutique">
-                      <% (shopAssignableRoles || []).forEach(function(r) { %>
-                        <option value="<%= r %>" <%= m.role === r ? "selected" : "" %>><%= fr.role(r) %> (boutique)</option>
-                      <% }) %>
-                      </optgroup>
-                    </select>
-                    <select class="form-select form-select-sm" name="organizationId" style="max-width:16rem">
-                      <option value="">Boutique (si rôle boutique)</option>
-                      <% (organizations || []).forEach(function(org) { %>
-                        <option value="<%= org.id %>" <%= m.organizationId === org.id ? "selected" : "" %>><%= org.name %></option>
                       <% }) %>
                     </select>
                     <button type="submit" class="btn btn-sm btn-outline-primary">Mettre à jour</button>
