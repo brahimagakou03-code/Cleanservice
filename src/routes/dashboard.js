@@ -147,7 +147,7 @@ router.get("/platform/users", requirePlatformAdmin, async (req, res) => {
     }),
   );
   const shopOrgIds = organizations.map((o) => o.id);
-  const [members, shopAccessUsers] = await Promise.all([
+  const [members, shopAccessUsers, allUsersRaw, allCustomersRaw] = await Promise.all([
     prisma.user.findMany({
       where: { organizationId: req.user.organizationId, ...userSearchWhere },
       orderBy: { createdAt: "asc" },
@@ -162,7 +162,83 @@ router.get("/platform/users", requirePlatformAdmin, async (req, res) => {
         orderBy: [{ organization: { name: "asc" } }, { createdAt: "desc" }],
       }),
     ),
+    withSkipTenant(() =>
+      prisma.user.findMany({
+        where: userSearchWhere,
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+          isActive: true,
+          organization: { select: { name: true, isPlatform: true } },
+        },
+        orderBy: { email: "asc" },
+      }),
+    ),
+    withSkipTenant(() =>
+      prisma.customer.findMany({
+        where: q
+          ? {
+              OR: [
+                { email: { contains: q, mode: "insensitive" } },
+                { companyName: { contains: q, mode: "insensitive" } },
+              ],
+            }
+          : {},
+        select: {
+          id: true,
+          email: true,
+          companyName: true,
+          isActive: true,
+          organization: { select: { name: true, isPlatform: true } },
+        },
+        orderBy: { email: "asc" },
+      }),
+    ),
   ]);
+  const accountsByEmail = new Map();
+  for (const u of allUsersRaw) {
+    const key = String(u.email || "").trim().toLowerCase();
+    if (!key) continue;
+    const current = accountsByEmail.get(key) || {
+      email: key,
+      displayName: "",
+      organizations: new Set(),
+      hasSuperAdminAccess: false,
+      hasAdminAccess: false,
+      hasClientAccess: false,
+      isActive: false,
+    };
+    current.displayName = `${u.firstName || ""} ${u.lastName || ""}`.trim() || current.displayName;
+    if (u.organization?.name) current.organizations.add(u.organization.name);
+    if (u.organization?.isPlatform === true && u.role === Role.PLATFORM_ADMIN) current.hasSuperAdminAccess = true;
+    if (u.organization?.isPlatform !== true) current.hasAdminAccess = true;
+    current.isActive = current.isActive || Boolean(u.isActive);
+    accountsByEmail.set(key, current);
+  }
+  for (const c of allCustomersRaw) {
+    const key = String(c.email || "").trim().toLowerCase();
+    if (!key) continue;
+    const current = accountsByEmail.get(key) || {
+      email: key,
+      displayName: "",
+      organizations: new Set(),
+      hasSuperAdminAccess: false,
+      hasAdminAccess: false,
+      hasClientAccess: false,
+      isActive: false,
+    };
+    current.displayName = c.companyName || current.displayName;
+    if (c.organization?.name) current.organizations.add(c.organization.name);
+    current.hasClientAccess = true;
+    current.isActive = current.isActive || Boolean(c.isActive);
+    accountsByEmail.set(key, current);
+  }
+  const allAccounts = [...accountsByEmail.values()]
+    .map((a) => ({ ...a, organizations: [...a.organizations].join(", ") || "-" }))
+    .sort((a, b) => a.email.localeCompare(b.email));
   let identityHint = null;
   if (q && q.includes("@")) {
     const emailQ = q.toLowerCase();
@@ -176,7 +252,11 @@ router.get("/platform/users", requirePlatformAdmin, async (req, res) => {
       withSkipTenant(() =>
         prisma.customer.findFirst({
           where: { email: { equals: emailQ, mode: "insensitive" } },
-          include: { organization: { select: { id: true, name: true, isPlatform: true } } },
+          select: {
+            id: true,
+            email: true,
+            organization: { select: { id: true, name: true, isPlatform: true } },
+          },
         }),
       ),
     ]);
@@ -200,6 +280,7 @@ router.get("/platform/users", requirePlatformAdmin, async (req, res) => {
     isPlatformContext: true,
     userSearch: q,
     identityHint,
+    allAccounts,
     teamAlert: flash?.type === "warning" ? flash.text : null,
     teamSuccess: flash?.type === "success" ? flash.text : null,
   });

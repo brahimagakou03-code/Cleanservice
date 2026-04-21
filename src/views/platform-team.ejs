@@ -236,6 +236,45 @@
     </div>
   </div>
 
+  <div class="card cs-tool-card mt-4">
+    <div class="card-header">Tous les comptes et leurs accès</div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="cs-table-tools mb-0">
+          <thead>
+            <tr>
+              <th>E-mail</th>
+              <th>Nom</th>
+              <th>Organisations</th>
+              <th>Super admin</th>
+              <th>Admin boutique</th>
+              <th>Client</th>
+              <th>Statut</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% (allAccounts || []).forEach(function(a) { %>
+              <tr>
+                <td><%= a.email %></td>
+                <td class="fw-medium"><%= a.displayName || "-" %></td>
+                <td><%= a.organizations %></td>
+                <td><span class="badge <%= a.hasSuperAdminAccess ? "text-bg-success" : "text-bg-secondary" %>"><%= a.hasSuperAdminAccess ? "Oui" : "Non" %></span></td>
+                <td><span class="badge <%= a.hasAdminAccess ? "text-bg-success" : "text-bg-secondary" %>"><%= a.hasAdminAccess ? "Oui" : "Non" %></span></td>
+                <td><span class="badge <%= a.hasClientAccess ? "text-bg-success" : "text-bg-secondary" %>"><%= a.hasClientAccess ? "Oui" : "Non" %></span></td>
+                <td><span class="badge <%= a.isActive ? "text-bg-success" : "text-bg-secondary" %>"><%= a.isActive ? "Actif" : "Inactif" %></span></td>
+              </tr>
+            <% }) %>
+            <% if (!allAccounts || !allAccounts.length) { %>
+              <tr>
+                <td colspan="7" class="text-muted">Aucun compte trouvé pour ce filtre.</td>
+              </tr>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <p class="mt-4 mb-0 d-flex flex-wrap gap-2">
     <a class="btn btn-outline-primary" href="/dashboard/platform/organizations">Franchisés</a>
     <a class="btn btn-outline-secondary" href="/dashboard">Tableau de bord siège</a>
