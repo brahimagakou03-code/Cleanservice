@@ -49,30 +49,41 @@ async function resolveActiveStaff(supabaseUserId, email) {
 }
 
 async function resolveActiveCustomer(supabaseUserId, email) {
-  const custByUid = await prisma.customer.findFirst({
-    where: { isActive: true, authUid: supabaseUserId },
-  });
-  if (custByUid) return custByUid;
-
-  const custByEmail = await prisma.customer.findFirst({
-    where: { isActive: true, email: emailMatchesInsensitive(email), authUid: null },
-  });
-  if (custByEmail) {
-    await prisma.customer.update({ where: { id: custByEmail.id }, data: { authUid: supabaseUserId } });
-    return { ...custByEmail, authUid: supabaseUserId };
-  }
-
-  const custStaleAuth = await prisma.customer.findFirst({
-    where: { isActive: true, email: emailMatchesInsensitive(email), authUid: { not: null } },
-  });
-  if (custStaleAuth && custStaleAuth.authUid !== supabaseUserId) {
-    await prisma.customer.update({
-      where: { id: custStaleAuth.id },
-      data: { authUid: supabaseUserId },
+  try {
+    const custByUid = await prisma.customer.findFirst({
+      where: { isActive: true, authUid: supabaseUserId },
     });
-    return { ...custStaleAuth, authUid: supabaseUserId };
+    if (custByUid) return custByUid;
+
+    const custByEmail = await prisma.customer.findFirst({
+      where: { isActive: true, email: emailMatchesInsensitive(email), authUid: null },
+    });
+    if (custByEmail) {
+      await prisma.customer.update({ where: { id: custByEmail.id }, data: { authUid: supabaseUserId } });
+      return { ...custByEmail, authUid: supabaseUserId };
+    }
+
+    const custStaleAuth = await prisma.customer.findFirst({
+      where: { isActive: true, email: emailMatchesInsensitive(email), authUid: { not: null } },
+    });
+    if (custStaleAuth && custStaleAuth.authUid !== supabaseUserId) {
+      await prisma.customer.update({
+        where: { id: custStaleAuth.id },
+        data: { authUid: supabaseUserId },
+      });
+      return { ...custStaleAuth, authUid: supabaseUserId };
+    }
+    return null;
+  } catch (err) {
+    const msg = String(err?.message || "");
+    // Compatibilite DB: anciennes bases sans colonne Customer.authUid.
+    if (msg.includes("Customer.authUid") && msg.includes("does not exist")) {
+      return prisma.customer.findFirst({
+        where: { isActive: true, email: emailMatchesInsensitive(email) },
+      });
+    }
+    throw err;
   }
-  return null;
 }
 
 async function resolveAppAccessProfiles(supabaseUser) {

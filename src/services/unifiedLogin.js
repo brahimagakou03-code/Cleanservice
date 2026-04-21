@@ -45,6 +45,17 @@ function isPrismaDbUnreachable(err) {
   return code === "P1001" || msg.includes("Can't reach database server") || msg.includes("P1001");
 }
 
+async function syncCustomerAuthUidIfSupported(customerId, authUid) {
+  try {
+    await prisma.customer.update({ where: { id: customerId }, data: { authUid } });
+  } catch (err) {
+    const msg = String(err?.message || "");
+    // Compatibilite DB: ne bloque pas le login si Customer.authUid n'existe pas encore.
+    if (msg.includes("Customer.authUid") && msg.includes("does not exist")) return;
+    throw err;
+  }
+}
+
 /**
  * Connexion unique (Supabase Auth) : e-mail + mot de passe ; code client optionnel (héritage).
  * @returns {{ ok: true, redirect: string } | { ok: false, reason: string }}
@@ -161,7 +172,7 @@ async function performUnifiedLoginInner(req, res, { email: em, password: pwd, co
         if (!ensured.ok) {
           return { ok: false, reason: "provision", message: ensured.error };
         }
-        await prisma.customer.update({ where: { id: customer.id }, data: { authUid: ensured.authUid } });
+        await syncCustomerAuthUidIfSupported(customer.id, ensured.authUid);
         const { data, error } = await supabase.auth.signInWithPassword({ email: em, password: plain });
         if (error || !data?.user) {
           return { ok: false, reason: "auth", message: error?.message || "Connexion refusée." };
