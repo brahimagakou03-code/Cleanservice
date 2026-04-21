@@ -55,6 +55,7 @@ function urlencodedTypeMatcher(req) {
     p === "/dashboard/platform/shop-admins/create" ||
     /^\/dashboard\/platform\/shop-admins\/[^/]+\/delete$/.test(p) ||
     /^\/dashboard\/platform\/users\/[^/]+\/role$/.test(p) ||
+    /^\/dashboard\/platform\/users\/[^/]+\/assign-shop-admin$/.test(p) ||
     p === "/admin-test"
   )
     return true;
@@ -84,6 +85,7 @@ app.use(
         p === "/dashboard/platform/shop-admins/create" ||
         /^\/dashboard\/platform\/shop-admins\/[^/]+\/delete$/.test(p) ||
         /^\/dashboard\/platform\/users\/[^/]+\/role$/.test(p) ||
+        /^\/dashboard\/platform\/users\/[^/]+\/assign-shop-admin$/.test(p) ||
         p === "/admin-test";
       if (!authPost && !ct.includes("application/x-www-form-urlencoded") && ct.trim()) return;
       try {

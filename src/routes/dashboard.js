@@ -61,6 +61,7 @@ function platformUsersAlertFromQuery(req) {
   if (ok === "platform_created") return { type: "success", text: "Compte siège créé avec mot de passe." };
   if (ok === "platform_invited") return { type: "success", text: "Invitation siège envoyée." };
   if (ok === "platform_updated") return { type: "success", text: "Rôle et accès mis à jour." };
+  if (ok === "shop_assigned") return { type: "success", text: "Accès admin boutique attribué." };
   if (ok === "shop_created") return { type: "success", text: "Compte admin boutique créé." };
   if (ok === "shop_deleted") return { type: "success", text: "Accès admin boutique supprimé." };
   if (err === "champs") return { type: "warning", text: "Merci de remplir les champs obligatoires." };
@@ -334,6 +335,34 @@ router.post("/platform/users/:id/role", requirePlatformAdmin, async (req, res) =
   }
   await prisma.user.update({ where: { id: target.id }, data: { role } });
   return res.redirect("/dashboard/platform/users?ok=platform_updated");
+});
+
+router.post("/platform/users/:id/assign-shop-admin", requirePlatformAdmin, async (req, res) => {
+  const organizationId = String(req.body?.organizationId || "").trim();
+  if (!organizationId) return res.redirect("/dashboard/platform/users?err=org");
+
+  const [target, org] = await Promise.all([
+    prisma.user.findFirst({ where: { id: req.params.id } }),
+    withSkipTenant(() =>
+      prisma.organization.findFirst({
+        where: { id: organizationId, isPlatform: false },
+        select: { id: true },
+      }),
+    ),
+  ]);
+  if (!target || target.organizationId !== req.user.organizationId) {
+    return res.redirect("/dashboard/platform/users?err=not_found");
+  }
+  if (!org) return res.redirect("/dashboard/platform/users?err=org");
+  if (target.id === req.user.sub) return res.redirect("/dashboard/platform/users?err=self_demote");
+
+  await withSkipTenant(() =>
+    prisma.user.update({
+      where: { id: target.id },
+      data: { organizationId: org.id, role: Role.ADMIN },
+    }),
+  );
+  return res.redirect("/dashboard/platform/users?ok=shop_assigned");
 });
 
 router.post("/platform/users/:id/toggle-active", requirePlatformAdmin, async (req, res) => {

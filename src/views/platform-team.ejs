@@ -147,6 +147,15 @@
                       <%= m.isActive ? "Désactiver" : "Activer" %>
                     </button>
                   </form>
+                  <form method="POST" action="/dashboard/platform/users/<%= m.id %>/assign-shop-admin" class="d-inline ms-2">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                    <select class="form-select form-select-sm d-inline-block" name="organizationId" style="max-width:11rem">
+                      <% (organizations || []).forEach(function(org) { %>
+                        <option value="<%= org.id %>"><%= org.name %></option>
+                      <% }) %>
+                    </select>
+                    <button type="submit" class="btn btn-sm btn-outline-primary">Donner accès boutique (ADMIN)</button>
+                  </form>
                 </td>
               </tr>
             <% }) %>
