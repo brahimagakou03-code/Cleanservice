@@ -157,9 +157,22 @@
                 <td>
                   <form method="POST" action="/dashboard/platform/users/<%= m.id %>/role" class="d-flex flex-wrap align-items-center gap-2">
                     <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-                    <select class="form-select form-select-sm" name="role" style="max-width:14rem">
+                    <select class="form-select form-select-sm" name="role" style="max-width:16rem">
+                      <optgroup label="Rôles siège">
                       <% (assignableRoles || []).forEach(function(r) { %>
                         <option value="<%= r %>" <%= m.role === r ? "selected" : "" %>><%= fr.role(r) %></option>
+                      <% }) %>
+                      </optgroup>
+                      <optgroup label="Rôles boutique">
+                      <% (shopAssignableRoles || []).forEach(function(r) { %>
+                        <option value="<%= r %>" <%= m.role === r ? "selected" : "" %>><%= fr.role(r) %> (boutique)</option>
+                      <% }) %>
+                      </optgroup>
+                    </select>
+                    <select class="form-select form-select-sm" name="organizationId" style="max-width:16rem">
+                      <option value="">Boutique (si rôle boutique)</option>
+                      <% (organizations || []).forEach(function(org) { %>
+                        <option value="<%= org.id %>" <%= m.organizationId === org.id ? "selected" : "" %>><%= org.name %></option>
                       <% }) %>
                     </select>
                     <button type="submit" class="btn btn-sm btn-outline-primary">Mettre à jour</button>

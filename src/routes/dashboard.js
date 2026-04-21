@@ -56,6 +56,7 @@ function platformUsersAlertFromQuery(req) {
   const ok = typeof req.query.ok === "string" ? req.query.ok : "";
   if (ok === "platform_created") return { type: "success", text: "Compte siège créé avec mot de passe." };
   if (ok === "platform_invited") return { type: "success", text: "Invitation siège envoyée." };
+  if (ok === "platform_updated") return { type: "success", text: "Rôle et accès mis à jour." };
   if (ok === "shop_created") return { type: "success", text: "Compte admin boutique créé." };
   if (ok === "shop_deleted") return { type: "success", text: "Accès admin boutique supprimé." };
   if (err === "champs") return { type: "warning", text: "Merci de remplir les champs obligatoires." };
@@ -68,7 +69,14 @@ function platformUsersAlertFromQuery(req) {
   if (err === "org") return { type: "warning", text: "Organisation boutique introuvable." };
   if (err === "not_found") return { type: "warning", text: "Compte admin boutique introuvable." };
   if (err === "delete") return { type: "warning", text: "Suppression impossible pour ce compte." };
+  if (err === "self_demote") return { type: "warning", text: "Vous ne pouvez pas retirer votre propre accès super admin." };
+  if (err === "invalid_role") return { type: "warning", text: "Rôle invalide pour cette action." };
   return null;
+}
+
+function getAssignableShopRolesForPlatform() {
+  // Accès boutique: on exclut OWNER pour éviter une élévation trop large depuis le siège.
+  return getAssignableTenantRoles(Role.OWNER).filter((r) => r !== Role.OWNER);
 }
 
 router.get("/platform", requirePlatformAdmin, (_req, res) => {
@@ -117,6 +125,7 @@ router.get("/platform/users", requirePlatformAdmin, async (req, res) => {
     shopAccessUsers,
     organizations,
     assignableRoles: getAssignablePlatformRoles(),
+    shopAssignableRoles: getAssignableShopRolesForPlatform(),
     isPlatformContext: true,
     teamAlert: flash?.type === "warning" ? flash.text : null,
     teamSuccess: flash?.type === "success" ? flash.text : null,
@@ -337,16 +346,52 @@ router.post("/platform/shop-admins/:id/delete", requirePlatformAdmin, async (req
 });
 
 router.post("/platform/users/:id/role", requirePlatformAdmin, async (req, res) => {
-  const { role } = req.body;
-  const allowed = getAssignablePlatformRoles();
-  if (!allowed.includes(role)) {
-    return res.status(400).send("Rôle plateforme invalide.");
+  const role = String(req.body?.role || "").trim();
+  const organizationId = String(req.body?.organizationId || "").trim();
+  const platformRoles = getAssignablePlatformRoles();
+  const shopRoles = getAssignableShopRolesForPlatform();
+  const target = await withSkipTenant(() =>
+    prisma.user.findFirst({ where: { id: req.params.id } }),
+  );
+  if (!target) {
+    return res.redirect("/dashboard/platform/users?err=not_found");
   }
-  const target = await prisma.user.findFirst({ where: { id: req.params.id } });
-  if (!target || target.organizationId !== req.user.organizationId) {
-    return res.status(404).send("Membre introuvable.");
+
+  if (platformRoles.includes(role)) {
+    await withSkipTenant(() =>
+      prisma.user.update({
+        where: { id: target.id },
+        data: { role, organizationId: req.user.organizationId },
+      }),
+    );
+    return res.redirect("/dashboard/platform/users?ok=platform_updated");
   }
-  await prisma.user.update({ where: { id: target.id }, data: { role } });
+
+  if (!shopRoles.includes(role)) {
+    return res.redirect("/dashboard/platform/users?err=invalid_role");
+  }
+  if (!organizationId) {
+    return res.redirect("/dashboard/platform/users?err=org");
+  }
+  if (target.id === req.user.sub) {
+    return res.redirect("/dashboard/platform/users?err=self_demote");
+  }
+
+  const org = await withSkipTenant(() =>
+    prisma.organization.findFirst({
+      where: { id: organizationId, isPlatform: false },
+      select: { id: true },
+    }),
+  );
+  if (!org) {
+    return res.redirect("/dashboard/platform/users?err=org");
+  }
+  await withSkipTenant(() =>
+    prisma.user.update({
+      where: { id: target.id },
+      data: { role, organizationId: org.id },
+    }),
+  );
   return res.redirect("/dashboard/platform/users");
 });
 
