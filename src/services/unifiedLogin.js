@@ -71,10 +71,7 @@ function canAccessTargetPortal(access, targetPortal) {
   const customer = access?.customer || null;
   if (targetPortal === "auto") return Boolean(staff || customer);
   if (targetPortal === "client") return Boolean(customer);
-  if (targetPortal === "admin") {
-    // Portail admin boutique: reserve aux comptes staff d'une organisation non plateforme.
-    return Boolean(staff && staff.organization?.isPlatform !== true);
-  }
+  if (targetPortal === "admin") return Boolean(staff);
   if (targetPortal === "superadmin") {
     return Boolean(staff && staff.organization?.isPlatform === true && staff.role === Role.PLATFORM_ADMIN);
   }

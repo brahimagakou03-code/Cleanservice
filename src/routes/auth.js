@@ -27,7 +27,7 @@ async function redirectIfAlreadyAuthenticated(req, res, targetPortal = "auto") {
       Boolean(access.staff) &&
       access.staff.organization?.isPlatform === true &&
       access.staff.role === Role.PLATFORM_ADMIN;
-    const canAdmin = Boolean(access.staff && access.staff.organization?.isPlatform !== true);
+    const canAdmin = Boolean(access.staff);
     const canClient = Boolean(access.customer);
     if (target === "superadmin" && canSuperAdmin) return res.redirect("/dashboard/platform"), true;
     if (target === "admin" && canAdmin) return res.redirect("/dashboard"), true;
