@@ -51,6 +51,26 @@ function requirePlatformAdmin(req, res, next) {
   next();
 }
 
+function platformUsersAlertFromQuery(req) {
+  const err = typeof req.query.err === "string" ? req.query.err : "";
+  const ok = typeof req.query.ok === "string" ? req.query.ok : "";
+  if (ok === "platform_created") return { type: "success", text: "Compte siège créé avec mot de passe." };
+  if (ok === "platform_invited") return { type: "success", text: "Invitation siège envoyée." };
+  if (ok === "shop_created") return { type: "success", text: "Compte admin boutique créé." };
+  if (ok === "shop_deleted") return { type: "success", text: "Accès admin boutique supprimé." };
+  if (err === "champs") return { type: "warning", text: "Merci de remplir les champs obligatoires." };
+  if (err === "password") return { type: "warning", text: "Mot de passe invalide (minimum 8 caractères)." };
+  if (err === "mismatch") return { type: "warning", text: "Les mots de passe ne correspondent pas." };
+  if (err === "email_exists") return { type: "warning", text: "Cet e-mail est déjà utilisé." };
+  if (err === "auth_exists") return { type: "warning", text: "Un compte Auth existe déjà pour cet e-mail." };
+  if (err === "auth_create") return { type: "warning", text: "Création du compte Auth impossible." };
+  if (err === "db_create") return { type: "warning", text: "Compte Auth créé mais enregistrement interne impossible." };
+  if (err === "org") return { type: "warning", text: "Organisation boutique introuvable." };
+  if (err === "not_found") return { type: "warning", text: "Compte admin boutique introuvable." };
+  if (err === "delete") return { type: "warning", text: "Suppression impossible pour ce compte." };
+  return null;
+}
+
 router.get("/platform", requirePlatformAdmin, (_req, res) => {
   res.redirect("/dashboard/platform/organizations");
 });
@@ -71,34 +91,35 @@ router.get("/platform/organizations", requirePlatformAdmin, async (req, res, nex
 });
 
 router.get("/platform/users", requirePlatformAdmin, async (req, res) => {
-  const members = await prisma.user.findMany({ orderBy: { createdAt: "asc" } });
-  const err = typeof req.query.err === "string" ? req.query.err : "";
-  const ok = req.query.ok === "1";
-  let teamAlert = null;
-  let teamSuccess = null;
-  if (ok) {
-    teamSuccess = "Compte administrateur créé avec mot de passe.";
-  } else if (err === "champs") {
-    teamAlert = "Merci de remplir les champs obligatoires.";
-  } else if (err === "password") {
-    teamAlert = "Mot de passe invalide (minimum 8 caractères).";
-  } else if (err === "mismatch") {
-    teamAlert = "Les mots de passe ne correspondent pas.";
-  } else if (err === "email_exists") {
-    teamAlert = "Cet e-mail est déjà utilisé.";
-  } else if (err === "auth_exists") {
-    teamAlert = "Un compte Auth existe déjà pour cet e-mail.";
-  } else if (err === "auth_create") {
-    teamAlert = "Création du compte Auth impossible.";
-  } else if (err === "db_create") {
-    teamAlert = "Compte Auth créé mais enregistrement interne impossible. Vérifiez la base.";
-  }
+  const [members, shopAccessUsers, organizations] = await Promise.all([
+    prisma.user.findMany({
+      where: { organizationId: req.user.organizationId },
+      orderBy: { createdAt: "asc" },
+    }),
+    withSkipTenant(() =>
+      prisma.user.findMany({
+        where: { organization: { isPlatform: false } },
+        include: { organization: true },
+        orderBy: [{ organization: { name: "asc" } }, { createdAt: "asc" }],
+      }),
+    ),
+    withSkipTenant(() =>
+      prisma.organization.findMany({
+        where: { isPlatform: false },
+        orderBy: { name: "asc" },
+        select: { id: true, name: true, slug: true },
+      }),
+    ),
+  ]);
+  const flash = platformUsersAlertFromQuery(req);
   return res.render("platform-team", {
     members,
+    shopAccessUsers,
+    organizations,
     assignableRoles: getAssignablePlatformRoles(),
     isPlatformContext: true,
-    teamAlert,
-    teamSuccess,
+    teamAlert: flash?.type === "warning" ? flash.text : null,
+    teamSuccess: flash?.type === "success" ? flash.text : null,
   });
 });
 
@@ -168,7 +189,7 @@ router.post("/platform/users/create", requirePlatformAdmin, async (req, res) => 
     return res.redirect("/dashboard/platform/users?err=db_create");
   }
 
-  return res.redirect("/dashboard/platform/users?ok=1");
+  return res.redirect("/dashboard/platform/users?ok=platform_created");
 });
 
 router.post("/platform/users/invite", requirePlatformAdmin, async (req, res) => {
@@ -229,7 +250,90 @@ router.post("/platform/users/invite", requirePlatformAdmin, async (req, res) => 
     subject: tpl.subject,
     html: tpl.html,
   });
-  return res.redirect("/dashboard/platform/users");
+  return res.redirect("/dashboard/platform/users?ok=platform_invited");
+});
+
+router.post("/platform/shop-admins/create", requirePlatformAdmin, async (req, res) => {
+  const { organizationId, email, firstName, lastName, password, passwordConfirm } = req.body || {};
+  const orgId = String(organizationId || "").trim();
+  const emailNorm = String(email || "").trim().toLowerCase();
+  const pwd = String(password || "");
+  const pwdConfirm = String(passwordConfirm || "");
+  if (!orgId || !emailNorm || !pwd || !pwdConfirm) {
+    return res.redirect("/dashboard/platform/users?err=champs");
+  }
+  if (pwd.length < 8) return res.redirect("/dashboard/platform/users?err=password");
+  if (pwd !== pwdConfirm) return res.redirect("/dashboard/platform/users?err=mismatch");
+
+  const org = await withSkipTenant(() =>
+    prisma.organization.findFirst({
+      where: { id: orgId, isPlatform: false },
+      select: { id: true },
+    }),
+  );
+  if (!org) return res.redirect("/dashboard/platform/users?err=org");
+
+  const existingUser = await withSkipTenant(() =>
+    prisma.user.findFirst({
+      where: { email: { equals: emailNorm, mode: "insensitive" } },
+      select: { id: true },
+    }),
+  );
+  if (existingUser) return res.redirect("/dashboard/platform/users?err=email_exists");
+
+  const svc = createSupabaseServiceClient();
+  if (!svc) return res.status(503).send("Supabase (SUPABASE_SERVICE_ROLE_KEY) non configure.");
+  const { data: created, error: createErr } = await svc.auth.admin.createUser({
+    email: emailNorm,
+    password: pwd,
+    email_confirm: true,
+  });
+  if (createErr || !created?.user?.id) {
+    if (isAlreadyRegisteredError(createErr)) return res.redirect("/dashboard/platform/users?err=auth_exists");
+    return res.redirect("/dashboard/platform/users?err=auth_create");
+  }
+
+  try {
+    await withSkipTenant(() =>
+      prisma.user.create({
+        data: {
+          email: emailNorm,
+          firstName: String(firstName || "").trim() || "Admin",
+          lastName: String(lastName || "").trim() || "Boutique",
+          role: Role.ADMIN,
+          organizationId: org.id,
+          authUid: created.user.id,
+          passwordHash: null,
+        },
+      }),
+    );
+  } catch (_) {
+    try {
+      await svc.auth.admin.deleteUser(created.user.id);
+    } catch {
+      /* ignore */
+    }
+    return res.redirect("/dashboard/platform/users?err=db_create");
+  }
+  return res.redirect("/dashboard/platform/users?ok=shop_created");
+});
+
+router.post("/platform/shop-admins/:id/delete", requirePlatformAdmin, async (req, res) => {
+  const target = await withSkipTenant(() =>
+    prisma.user.findFirst({
+      where: { id: req.params.id },
+      include: { organization: true },
+    }),
+  );
+  if (!target || target.organization?.isPlatform) {
+    return res.redirect("/dashboard/platform/users?err=not_found");
+  }
+  try {
+    await withSkipTenant(() => prisma.user.delete({ where: { id: target.id } }));
+  } catch (_) {
+    return res.redirect("/dashboard/platform/users?err=delete");
+  }
+  return res.redirect("/dashboard/platform/users?ok=shop_deleted");
 });
 
 router.post("/platform/users/:id/role", requirePlatformAdmin, async (req, res) => {

@@ -93,6 +93,48 @@
     </div>
   </div>
 
+  <div class="card cs-tool-card mb-4">
+    <div class="card-header">Créer un accès admin boutique</div>
+    <div class="card-body">
+      <form method="POST" action="/dashboard/platform/shop-admins/create" class="row g-3 align-items-end">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <div class="col-md-3">
+          <label class="form-label small fw-semibold">Boutique <span class="text-danger">*</span></label>
+          <select class="form-select" name="organizationId" required>
+            <option value="">Choisir une boutique...</option>
+            <% (organizations || []).forEach(function(org) { %>
+              <option value="<%= org.id %>"><%= org.name %> (<%= org.slug %>)</option>
+            <% }) %>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small fw-semibold">E-mail <span class="text-danger">*</span></label>
+          <input class="form-control" type="email" name="email" required placeholder="admin.boutique@exemple.fr" />
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small fw-semibold">Prénom</label>
+          <input class="form-control" name="firstName" placeholder="Prénom" />
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small fw-semibold">Nom</label>
+          <input class="form-control" name="lastName" placeholder="Nom" />
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small fw-semibold">Mot de passe <span class="text-danger">*</span></label>
+          <input class="form-control" type="password" name="password" minlength="8" required />
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small fw-semibold">Confirmer <span class="text-danger">*</span></label>
+          <input class="form-control" type="password" name="passwordConfirm" minlength="8" required />
+        </div>
+        <div class="col-12">
+          <button type="submit" class="btn btn-primary">Créer accès admin boutique</button>
+        </div>
+      </form>
+      <p class="small text-muted mt-2 mb-0">Ce compte pourra se connecter via <code>/admin/login</code> et accéder au dashboard de la boutique.</p>
+    </div>
+  </div>
+
   <div class="card cs-tool-card">
     <div class="card-header">Membres siège</div>
     <div class="card-body p-0">
@@ -140,6 +182,54 @@
                 </td>
               </tr>
             <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="card cs-tool-card mt-4">
+    <div class="card-header">Accès admin boutique</div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="cs-table-tools mb-0">
+          <thead>
+            <tr>
+              <th>Boutique</th>
+              <th>Nom</th>
+              <th>E-mail</th>
+              <th>Rôle</th>
+              <th>Statut</th>
+              <th class="text-end">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% (shopAccessUsers || []).forEach(function(m) { %>
+              <tr>
+                <td><%= m.organization?.name || "-" %></td>
+                <td class="fw-medium"><%= m.firstName %> <%= m.lastName %></td>
+                <td><%= m.email %></td>
+                <td><%= fr.role(m.role) %></td>
+                <td>
+                  <% if (m.isActive) { %>
+                    <span class="badge text-bg-success">Actif</span>
+                  <% } else { %>
+                    <span class="badge text-bg-secondary">Inactif</span>
+                  <% } %>
+                </td>
+                <td class="text-end">
+                  <form method="POST" action="/dashboard/platform/shop-admins/<%= m.id %>/delete" class="d-inline">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Supprimer accès</button>
+                  </form>
+                </td>
+              </tr>
+            <% }) %>
+            <% if (!shopAccessUsers || !shopAccessUsers.length) { %>
+              <tr>
+                <td colspan="6" class="text-muted">Aucun accès admin boutique créé depuis le siège.</td>
+              </tr>
+            <% } %>
           </tbody>
         </table>
       </div>
