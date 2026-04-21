@@ -756,8 +756,8 @@ router.get("/admin/login", async (req, res) => {
     req,
     res,
     "admin",
-    "Connexion admin siège",
-    "Accès au portail administration (équipes internes et magasins)."
+    "Connexion admin boutique",
+    "Accès au portail boutique (produits, commandes, clients et statistiques)."
   );
 });
 

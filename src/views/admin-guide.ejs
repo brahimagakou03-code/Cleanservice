@@ -75,7 +75,7 @@
         <p class="cs-guide-section-lead mb-3">Ce que vous devez savoir avant de naviguer dans l’outil.</p>
         <%- include("partials/guide-context", { pathUrl: "/dashboard/guide", panelTitle: "Page actuelle", bullets: ["Vous lisez déjà le guide : à gauche, le sommaire ; à droite, les explications.", "Chaque chapitre commence par un encadré « Repères » : même principe partout.", "Le bouton bleu ouvre la page réelle dans un <strong>nouvel onglet</strong> pour ne pas perdre ce guide."], mockVariant: "guide_page" }) %>
         <p>Cet espace sert à <strong>former les futurs administrateurs</strong> : navigation, rôles, et enchaînement des tâches (clients, catalogue, commandes, facturation). Chaque organisation ne voit que <strong>ses propres données</strong>.</p>
-        <p class="small text-muted mb-0">Connexions séparées : <code>/super-admin/login</code> (super admin), <code>/admin/login</code> (admin siège), <code>/portal/login</code> (clients). Un même utilisateur peut accéder à plusieurs portails selon ses droits.</p>
+        <p class="small text-muted mb-0">Connexions séparées : <code>/super-admin/login</code> (super admin), <code>/admin/login</code> (admin boutique), <code>/portal/login</code> (clients). Un même utilisateur peut accéder à plusieurs portails selon ses droits.</p>
         <p class="small text-muted mb-0 mt-2">
           Diagnostic technique (équipe IT) : la page <code>/admin-test</code> permet de simuler une connexion et d’afficher des logs.
           Après un test réussi, une colonne <strong>JWT</strong> indique si le jeton d’accès <strong>Supabase Auth</strong> est présent et encore valide (expiration) ; le détail complet figure dans la colonne <em>Détails</em> du tableau.
