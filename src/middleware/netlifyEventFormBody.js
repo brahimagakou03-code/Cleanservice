@@ -16,7 +16,10 @@ function netlifyEventFormBodyMerge(req, _res, next) {
       "/portal/login",
       "/dashboard/platform/users/create",
     ]);
-    if (!allowed.has(pathname)) return next();
+    const isPlatformShopAdminsPath =
+      pathname === "/dashboard/platform/shop-admins/create" ||
+      /^\/dashboard\/platform\/shop-admins\/[^/]+\/delete$/.test(pathname);
+    if (!allowed.has(pathname) && !isPlatformShopAdminsPath) return next();
 
     const event = req.apiGateway?.event;
     if (!event) return next();
