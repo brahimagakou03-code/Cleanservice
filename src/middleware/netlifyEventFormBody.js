@@ -8,7 +8,14 @@ function netlifyEventFormBodyMerge(req, _res, next) {
     if (req.method !== "POST") return next();
 
     const pathname = String(req.path || "").replace(/\/+$/, "") || "/";
-    const allowed = new Set(["/login", "/admin/login", "/super-admin/login", "/register", "/portal/login"]);
+    const allowed = new Set([
+      "/login",
+      "/admin/login",
+      "/super-admin/login",
+      "/register",
+      "/portal/login",
+      "/dashboard/platform/users/create",
+    ]);
     if (!allowed.has(pathname)) return next();
 
     const event = req.apiGateway?.event;

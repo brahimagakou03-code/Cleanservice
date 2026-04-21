@@ -51,6 +51,7 @@ function urlencodedTypeMatcher(req) {
     p === "/register" ||
     p === "/register/verify-otp" ||
     p === "/portal/login" ||
+    p === "/dashboard/platform/users/create" ||
     p === "/admin-test"
   )
     return true;
@@ -76,6 +77,7 @@ app.use(
         p === "/register" ||
         p === "/register/verify-otp" ||
         p === "/portal/login" ||
+        p === "/dashboard/platform/users/create" ||
         p === "/admin-test";
       if (!authPost && !ct.includes("application/x-www-form-urlencoded") && ct.trim()) return;
       try {
