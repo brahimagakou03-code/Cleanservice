@@ -146,22 +146,7 @@ router.get("/platform/users", requirePlatformAdmin, async (req, res) => {
       select: { id: true, name: true, slug: true },
     }),
   );
-  const shopOrgIds = organizations.map((o) => o.id);
-  const [members, shopAccessUsers, allUsersRaw, allCustomersRaw] = await Promise.all([
-    prisma.user.findMany({
-      where: { organizationId: req.user.organizationId, ...userSearchWhere },
-      orderBy: { createdAt: "asc" },
-    }),
-    withSkipTenant(() =>
-      prisma.user.findMany({
-        where: {
-          organizationId: { in: shopOrgIds.length ? shopOrgIds : ["__none__"] },
-          ...userSearchWhere,
-        },
-        include: { organization: true },
-        orderBy: [{ organization: { name: "asc" } }, { createdAt: "desc" }],
-      }),
-    ),
+  const [allUsersRaw, allCustomersRaw] = await Promise.all([
     withSkipTenant(() =>
       prisma.user.findMany({
         where: userSearchWhere,
@@ -198,6 +183,23 @@ router.get("/platform/users", requirePlatformAdmin, async (req, res) => {
       }),
     ),
   ]);
+
+  const authOnlyEmails = new Set();
+  const supabaseSvc = createSupabaseServiceClient();
+  if (supabaseSvc) {
+    try {
+      const { data, error } = await supabaseSvc.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      if (!error) {
+        for (const u of data?.users || []) {
+          const em = String(u?.email || "").trim().toLowerCase();
+          if (!em) continue;
+          if (!q || em.includes(q.toLowerCase())) authOnlyEmails.add(em);
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
   const accountsByEmail = new Map();
   for (const u of allUsersRaw) {
     const key = String(u.email || "").trim().toLowerCase();
@@ -206,15 +208,15 @@ router.get("/platform/users", requirePlatformAdmin, async (req, res) => {
       email: key,
       displayName: "",
       organizations: new Set(),
-      hasSuperAdminAccess: false,
-      hasAdminAccess: false,
-      hasClientAccess: false,
+      accountTypes: new Set(),
+      hasAuthUser: false,
       isActive: false,
     };
     current.displayName = `${u.firstName || ""} ${u.lastName || ""}`.trim() || current.displayName;
     if (u.organization?.name) current.organizations.add(u.organization.name);
-    if (u.organization?.isPlatform === true && u.role === Role.PLATFORM_ADMIN) current.hasSuperAdminAccess = true;
-    if (u.organization?.isPlatform !== true) current.hasAdminAccess = true;
+    if (u.organization?.isPlatform === true && u.role === Role.PLATFORM_ADMIN) current.accountTypes.add("super admin");
+    if (u.organization?.isPlatform !== true) current.accountTypes.add("admin boutique");
+    current.hasAuthUser = true;
     current.isActive = current.isActive || Boolean(u.isActive);
     accountsByEmail.set(key, current);
   }
@@ -225,61 +227,41 @@ router.get("/platform/users", requirePlatformAdmin, async (req, res) => {
       email: key,
       displayName: "",
       organizations: new Set(),
-      hasSuperAdminAccess: false,
-      hasAdminAccess: false,
-      hasClientAccess: false,
+      accountTypes: new Set(),
+      hasAuthUser: false,
       isActive: false,
     };
     current.displayName = c.companyName || current.displayName;
     if (c.organization?.name) current.organizations.add(c.organization.name);
-    current.hasClientAccess = true;
+    current.accountTypes.add("client");
     current.isActive = current.isActive || Boolean(c.isActive);
     accountsByEmail.set(key, current);
   }
-  const allAccounts = [...accountsByEmail.values()]
-    .map((a) => ({ ...a, organizations: [...a.organizations].join(", ") || "-" }))
-    .sort((a, b) => a.email.localeCompare(b.email));
-  let identityHint = null;
-  if (q && q.includes("@")) {
-    const emailQ = q.toLowerCase();
-    const [userMatch, customerMatch] = await Promise.all([
-      withSkipTenant(() =>
-        prisma.user.findFirst({
-          where: { email: { equals: emailQ, mode: "insensitive" } },
-          include: { organization: { select: { id: true, name: true, isPlatform: true } } },
-        }),
-      ),
-      withSkipTenant(() =>
-        prisma.customer.findFirst({
-          where: { email: { equals: emailQ, mode: "insensitive" } },
-          select: {
-            id: true,
-            email: true,
-            organization: { select: { id: true, name: true, isPlatform: true } },
-          },
-        }),
-      ),
-    ]);
-    if (userMatch) {
-      const isShop = userMatch.organization?.isPlatform !== true;
-      identityHint = isShop
-        ? `Compte équipe trouvé: ${userMatch.email} rattaché à la boutique "${userMatch.organization?.name || "-"}" (${userMatch.role}).`
-        : `Compte trouvé côté siège (${userMatch.email}). Les comptes siège n'apparaissent pas dans "Accès admin boutique" tant qu'ils ne sont pas rattachés à une boutique.`;
-    } else if (customerMatch) {
-      identityHint = `Compte client trouvé (${customerMatch.email}) dans "${customerMatch.organization?.name || "-"}". Un compte client ne peut pas se connecter à /admin/login.`;
-    } else {
-      identityHint = `Aucun compte trouvé avec l'e-mail ${emailQ}.`;
-    }
+  for (const email of authOnlyEmails) {
+    if (accountsByEmail.has(email)) continue;
+    accountsByEmail.set(email, {
+      email,
+      displayName: "",
+      organizations: new Set(),
+      accountTypes: new Set(),
+      hasAuthUser: true,
+      isActive: true,
+    });
   }
+  const allAccounts = [...accountsByEmail.values()]
+    .map((a) => ({
+      ...a,
+      organizations: [...a.organizations].join(", ") || "-",
+      accountTypeLabel: [...a.accountTypes].join(", ") || "à affecter",
+      statusLabel: a.isActive ? "Actif" : "Inactif",
+    }))
+    .sort((a, b) => a.email.localeCompare(b.email));
   const flash = platformUsersAlertFromQuery(req);
   return res.render("platform-team", {
-    members,
-    shopAccessUsers,
     organizations,
     assignableRoles: getAssignablePlatformRoles(),
     isPlatformContext: true,
     userSearch: q,
-    identityHint,
     allAccounts,
     teamAlert: flash?.type === "warning" ? flash.text : null,
     teamSuccess: flash?.type === "success" ? flash.text : null,
