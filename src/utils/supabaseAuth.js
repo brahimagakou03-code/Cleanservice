@@ -77,10 +77,10 @@ async function resolveActiveCustomer(supabaseUserId, email) {
   } catch (err) {
     const msg = String(err?.message || "");
     // Compatibilite DB: anciennes bases sans colonne Customer.authUid.
+    // Dans ce cas, toute requete Prisma Customer peut echouer: on desactive
+    // simplement la resolution client pour ne pas bloquer les portails admin.
     if (msg.includes("Customer.authUid") && msg.includes("does not exist")) {
-      return prisma.customer.findFirst({
-        where: { isActive: true, email: emailMatchesInsensitive(email) },
-      });
+      return null;
     }
     throw err;
   }
