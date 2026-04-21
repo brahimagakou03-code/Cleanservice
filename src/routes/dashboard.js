@@ -472,7 +472,7 @@ router.post("/platform/auth-users/attach-shop-admin", requirePlatformAdmin, asyn
   const organizationId = String(req.body?.organizationId || "").trim();
   if (!emailNorm || !organizationId) return res.redirect("/dashboard/platform/users?err=champs");
 
-  const [org, existingUser] = await Promise.all([
+  const [org, existingUserByEmail] = await Promise.all([
     withSkipTenant(() =>
       prisma.organization.findFirst({
         where: { id: organizationId, isPlatform: false },
@@ -482,12 +482,11 @@ router.post("/platform/auth-users/attach-shop-admin", requirePlatformAdmin, asyn
     withSkipTenant(() =>
       prisma.user.findFirst({
         where: { email: { equals: emailNorm, mode: "insensitive" } },
-        select: { id: true },
+        select: { id: true, firstName: true, lastName: true },
       }),
     ),
   ]);
   if (!org) return res.redirect("/dashboard/platform/users?err=org");
-  if (existingUser) return res.redirect("/dashboard/platform/users?err=email_exists");
 
   const svc = createSupabaseServiceClient();
   if (!svc) return res.status(503).send("Supabase (SUPABASE_SERVICE_ROLE_KEY) non configure.");
@@ -507,19 +506,43 @@ router.post("/platform/auth-users/attach-shop-admin", requirePlatformAdmin, asyn
   const lastName = String(req.body?.lastName || "").trim() || "Boutique";
 
   try {
-    await withSkipTenant(() =>
-      prisma.user.create({
-        data: {
-          email: emailNorm,
-          firstName,
-          lastName,
-          role: Role.ADMIN,
-          organizationId: org.id,
-          authUid,
-          passwordHash: null,
-        },
+    const existingUserByAuthUid = await withSkipTenant(() =>
+      prisma.user.findFirst({
+        where: { authUid },
+        select: { id: true, firstName: true, lastName: true },
       }),
     );
+    const target = existingUserByAuthUid || existingUserByEmail;
+    if (target?.id) {
+      await withSkipTenant(() =>
+        prisma.user.update({
+          where: { id: target.id },
+          data: {
+            email: emailNorm,
+            role: Role.ADMIN,
+            organizationId: org.id,
+            authUid,
+            isActive: true,
+            firstName: target.firstName || firstName,
+            lastName: target.lastName || lastName,
+          },
+        }),
+      );
+    } else {
+      await withSkipTenant(() =>
+        prisma.user.create({
+          data: {
+            email: emailNorm,
+            firstName,
+            lastName,
+            role: Role.ADMIN,
+            organizationId: org.id,
+            authUid,
+            passwordHash: null,
+          },
+        }),
+      );
+    }
   } catch {
     return res.redirect("/dashboard/platform/users?err=db_create");
   }
