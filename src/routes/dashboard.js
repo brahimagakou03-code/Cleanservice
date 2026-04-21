@@ -62,6 +62,7 @@ function platformUsersAlertFromQuery(req) {
   if (ok === "platform_invited") return { type: "success", text: "Invitation siège envoyée." };
   if (ok === "platform_updated") return { type: "success", text: "Rôle et accès mis à jour." };
   if (ok === "shop_assigned") return { type: "success", text: "Accès admin boutique attribué." };
+  if (ok === "shop_reassigned") return { type: "success", text: "Affectation boutique mise à jour." };
   if (ok === "shop_created") return { type: "success", text: "Compte admin boutique créé." };
   if (ok === "shop_deleted") return { type: "success", text: "Accès admin boutique supprimé." };
   if (err === "champs") return { type: "warning", text: "Merci de remplir les champs obligatoires." };
@@ -162,6 +163,34 @@ router.get("/platform/users", requirePlatformAdmin, async (req, res) => {
       }),
     ),
   ]);
+  let identityHint = null;
+  if (q && q.includes("@")) {
+    const emailQ = q.toLowerCase();
+    const [userMatch, customerMatch] = await Promise.all([
+      withSkipTenant(() =>
+        prisma.user.findFirst({
+          where: { email: { equals: emailQ, mode: "insensitive" } },
+          include: { organization: { select: { id: true, name: true, isPlatform: true } } },
+        }),
+      ),
+      withSkipTenant(() =>
+        prisma.customer.findFirst({
+          where: { email: { equals: emailQ, mode: "insensitive" } },
+          include: { organization: { select: { id: true, name: true, isPlatform: true } } },
+        }),
+      ),
+    ]);
+    if (userMatch) {
+      const isShop = userMatch.organization?.isPlatform !== true;
+      identityHint = isShop
+        ? `Compte équipe trouvé: ${userMatch.email} rattaché à la boutique "${userMatch.organization?.name || "-"}" (${userMatch.role}).`
+        : `Compte trouvé côté siège (${userMatch.email}). Les comptes siège n'apparaissent pas dans "Accès admin boutique" tant qu'ils ne sont pas rattachés à une boutique.`;
+    } else if (customerMatch) {
+      identityHint = `Compte client trouvé (${customerMatch.email}) dans "${customerMatch.organization?.name || "-"}". Un compte client ne peut pas se connecter à /admin/login.`;
+    } else {
+      identityHint = `Aucun compte trouvé avec l'e-mail ${emailQ}.`;
+    }
+  }
   const flash = platformUsersAlertFromQuery(req);
   return res.render("platform-team", {
     members,
@@ -170,6 +199,7 @@ router.get("/platform/users", requirePlatformAdmin, async (req, res) => {
     assignableRoles: getAssignablePlatformRoles(),
     isPlatformContext: true,
     userSearch: q,
+    identityHint,
     teamAlert: flash?.type === "warning" ? flash.text : null,
     teamSuccess: flash?.type === "success" ? flash.text : null,
   });
@@ -413,6 +443,36 @@ router.post("/platform/users/:id/assign-shop-admin", requirePlatformAdmin, async
     }),
   );
   return res.redirect("/dashboard/platform/users?ok=shop_assigned");
+});
+
+router.post("/platform/shop-admins/:id/assign", requirePlatformAdmin, async (req, res) => {
+  const organizationId = String(req.body?.organizationId || "").trim();
+  if (!organizationId) return res.redirect("/dashboard/platform/users?err=org");
+
+  const [target, org] = await Promise.all([
+    withSkipTenant(() =>
+      prisma.user.findFirst({
+        where: { id: req.params.id, organization: { isPlatform: false } },
+        select: { id: true, role: true, organizationId: true },
+      }),
+    ),
+    withSkipTenant(() =>
+      prisma.organization.findFirst({
+        where: { id: organizationId, isPlatform: false },
+        select: { id: true },
+      }),
+    ),
+  ]);
+  if (!target) return res.redirect("/dashboard/platform/users?err=not_found");
+  if (!org) return res.redirect("/dashboard/platform/users?err=org");
+
+  await withSkipTenant(() =>
+    prisma.user.update({
+      where: { id: target.id },
+      data: { organizationId: org.id },
+    }),
+  );
+  return res.redirect("/dashboard/platform/users?ok=shop_reassigned");
 });
 
 router.post("/platform/users/:id/toggle-active", requirePlatformAdmin, async (req, res) => {
