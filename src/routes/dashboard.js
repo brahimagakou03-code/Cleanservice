@@ -138,23 +138,27 @@ router.get("/platform/users", requirePlatformAdmin, async (req, res) => {
         ],
       }
     : {};
-  const [members, shopAccessUsers, organizations] = await Promise.all([
+  const organizations = await withSkipTenant(() =>
+    prisma.organization.findMany({
+      where: { isPlatform: false },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, slug: true },
+    }),
+  );
+  const shopOrgIds = organizations.map((o) => o.id);
+  const [members, shopAccessUsers] = await Promise.all([
     prisma.user.findMany({
       where: { organizationId: req.user.organizationId, ...userSearchWhere },
       orderBy: { createdAt: "asc" },
     }),
     withSkipTenant(() =>
       prisma.user.findMany({
-        where: { organization: { isPlatform: false }, ...userSearchWhere },
+        where: {
+          organizationId: { in: shopOrgIds.length ? shopOrgIds : ["__none__"] },
+          ...userSearchWhere,
+        },
         include: { organization: true },
         orderBy: [{ organization: { name: "asc" } }, { createdAt: "desc" }],
-      }),
-    ),
-    withSkipTenant(() =>
-      prisma.organization.findMany({
-        where: { isPlatform: false },
-        orderBy: { name: "asc" },
-        select: { id: true, name: true, slug: true },
       }),
     ),
   ]);
