@@ -112,6 +112,13 @@ router.get("/platform/users", requirePlatformAdmin, async (req, res) => {
         take: 200,
       }),
     ),
+    withSkipTenant(() =>
+      prisma.organization.findMany({
+        where: { isPlatform: false },
+        orderBy: { name: "asc" },
+        select: { id: true, name: true, slug: true },
+      }),
+    ),
   ]);
   const flash = platformUsersAlertFromQuery(req);
   return res.render("platform-team", {
