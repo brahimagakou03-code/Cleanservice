@@ -21,7 +21,22 @@ function netlifyEventFormBodyMerge(req, _res, next) {
       /^\/dashboard\/platform\/shop-admins\/[^/]+\/delete$/.test(pathname);
     const isPlatformUserRolePath = /^\/dashboard\/platform\/users\/[^/]+\/role$/.test(pathname);
     const isPlatformAssignShopPath = /^\/dashboard\/platform\/users\/[^/]+\/assign-shop-admin$/.test(pathname);
-    if (!allowed.has(pathname) && !isPlatformShopAdminsPath && !isPlatformUserRolePath && !isPlatformAssignShopPath)
+    const isPlatformOrgRenamePath = /^\/dashboard\/platform\/organizations\/[^/]+\/name$/.test(pathname);
+    const isCustomersPath =
+      /^\/dashboard\/customers\/[^/]+\/delete$/.test(pathname) ||
+      /^\/dashboard\/customers\/[^/]+\/sites$/.test(pathname) ||
+      /^\/dashboard\/customers\/[^/]+\/sites\/[^/]+\/(delete|update)$/.test(pathname) ||
+      /^\/dashboard\/customers\/[^/]+\/prices$/.test(pathname) ||
+      /^\/dashboard\/customers\/[^/]+\/prices\/[^/]+\/delete$/.test(pathname) ||
+      /^\/dashboard\/customers\/[^/]+\/(general|portal-test-credentials|invite-portal)$/.test(pathname);
+    if (
+      !allowed.has(pathname) &&
+      !isPlatformShopAdminsPath &&
+      !isPlatformUserRolePath &&
+      !isPlatformAssignShopPath &&
+      !isPlatformOrgRenamePath &&
+      !isCustomersPath
+    )
       return next();
 
     const event = req.apiGateway?.event;

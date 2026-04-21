@@ -51,6 +51,13 @@ function urlencodedTypeMatcher(req) {
     p === "/register" ||
     p === "/register/verify-otp" ||
     p === "/portal/login" ||
+    /^\/dashboard\/customers\/[^/]+\/delete$/.test(p) ||
+    /^\/dashboard\/customers\/[^/]+\/sites$/.test(p) ||
+    /^\/dashboard\/customers\/[^/]+\/sites\/[^/]+\/(delete|update)$/.test(p) ||
+    /^\/dashboard\/customers\/[^/]+\/prices$/.test(p) ||
+    /^\/dashboard\/customers\/[^/]+\/prices\/[^/]+\/delete$/.test(p) ||
+    /^\/dashboard\/customers\/[^/]+\/(general|portal-test-credentials|invite-portal)$/.test(p) ||
+    /^\/dashboard\/platform\/organizations\/[^/]+\/name$/.test(p) ||
     p === "/dashboard/platform/users/create" ||
     p === "/dashboard/platform/shop-admins/create" ||
     /^\/dashboard\/platform\/shop-admins\/[^/]+\/delete$/.test(p) ||
@@ -81,6 +88,13 @@ app.use(
         p === "/register" ||
         p === "/register/verify-otp" ||
         p === "/portal/login" ||
+        /^\/dashboard\/customers\/[^/]+\/delete$/.test(p) ||
+        /^\/dashboard\/customers\/[^/]+\/sites$/.test(p) ||
+        /^\/dashboard\/customers\/[^/]+\/sites\/[^/]+\/(delete|update)$/.test(p) ||
+        /^\/dashboard\/customers\/[^/]+\/prices$/.test(p) ||
+        /^\/dashboard\/customers\/[^/]+\/prices\/[^/]+\/delete$/.test(p) ||
+        /^\/dashboard\/customers\/[^/]+\/(general|portal-test-credentials|invite-portal)$/.test(p) ||
+        /^\/dashboard\/platform\/organizations\/[^/]+\/name$/.test(p) ||
         p === "/dashboard/platform/users/create" ||
         p === "/dashboard/platform/shop-admins/create" ||
         /^\/dashboard\/platform\/shop-admins\/[^/]+\/delete$/.test(p) ||

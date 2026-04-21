@@ -85,6 +85,15 @@ router.get("/platform", requirePlatformAdmin, (_req, res) => {
 
 router.get("/platform/organizations", requirePlatformAdmin, async (req, res, next) => {
   try {
+    const ok = typeof req.query.ok === "string" ? req.query.ok : "";
+    const err = typeof req.query.err === "string" ? req.query.err : "";
+    const teamSuccess = ok === "org_renamed" ? "Nom de l'organisation mis à jour." : null;
+    const teamAlert =
+      err === "org_name_required"
+        ? "Le nom de l'organisation est obligatoire."
+        : err === "org_not_found"
+          ? "Organisation introuvable."
+          : null;
     const organizations = await withSkipTenant(() =>
       prisma.organization.findMany({
         where: { isPlatform: false },
@@ -92,24 +101,53 @@ router.get("/platform/organizations", requirePlatformAdmin, async (req, res, nex
         include: { _count: { select: { users: true, customers: true } } },
       }),
     );
-    return res.render("platform-organizations", { organizations });
+    return res.render("platform-organizations", { organizations, teamSuccess, teamAlert });
   } catch (e) {
     return next(e);
   }
 });
 
+router.post("/platform/organizations/:id/name", requirePlatformAdmin, async (req, res) => {
+  const orgId = String(req.params.id || "").trim();
+  const name = String(req.body?.name || "").trim();
+  if (!name) return res.redirect("/dashboard/platform/organizations?err=org_name_required");
+  const target = await withSkipTenant(() =>
+    prisma.organization.findFirst({
+      where: { id: orgId, isPlatform: false },
+      select: { id: true },
+    }),
+  );
+  if (!target) return res.redirect("/dashboard/platform/organizations?err=org_not_found");
+  await withSkipTenant(() =>
+    prisma.organization.update({
+      where: { id: target.id },
+      data: { name },
+    }),
+  );
+  return res.redirect("/dashboard/platform/organizations?ok=org_renamed");
+});
+
 router.get("/platform/users", requirePlatformAdmin, async (req, res) => {
+  const q = String(req.query.q || "").trim();
+  const userSearchWhere = q
+    ? {
+        OR: [
+          { email: { contains: q, mode: "insensitive" } },
+          { firstName: { contains: q, mode: "insensitive" } },
+          { lastName: { contains: q, mode: "insensitive" } },
+        ],
+      }
+    : {};
   const [members, shopAccessUsers, organizations] = await Promise.all([
     prisma.user.findMany({
-      where: { organizationId: req.user.organizationId },
+      where: { organizationId: req.user.organizationId, ...userSearchWhere },
       orderBy: { createdAt: "asc" },
     }),
     withSkipTenant(() =>
       prisma.user.findMany({
-        where: { organization: { isPlatform: false } },
+        where: { organization: { isPlatform: false }, ...userSearchWhere },
         include: { organization: true },
         orderBy: [{ organization: { name: "asc" } }, { createdAt: "desc" }],
-        take: 200,
       }),
     ),
     withSkipTenant(() =>
@@ -127,6 +165,7 @@ router.get("/platform/users", requirePlatformAdmin, async (req, res) => {
     organizations,
     assignableRoles: getAssignablePlatformRoles(),
     isPlatformContext: true,
+    userSearch: q,
     teamAlert: flash?.type === "warning" ? flash.text : null,
     teamSuccess: flash?.type === "success" ? flash.text : null,
   });

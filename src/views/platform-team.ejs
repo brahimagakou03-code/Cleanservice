@@ -19,6 +19,22 @@
   <% if (typeof teamAlert !== "undefined" && teamAlert) { %>
     <div class="alert alert-warning" role="alert"><%= teamAlert %></div>
   <% } %>
+  <div class="card cs-tool-card mb-4">
+    <div class="card-body py-3">
+      <form method="GET" action="/dashboard/platform/users" class="row g-2 align-items-end">
+        <div class="col-md-6">
+          <label class="form-label small fw-semibold">Rechercher un compte (e-mail / nom)</label>
+          <input class="form-control" name="q" value="<%= userSearch || '' %>" placeholder="aspinettoyage@hotmail.fr" />
+        </div>
+        <div class="col-auto">
+          <button type="submit" class="btn btn-outline-primary">Rechercher</button>
+        </div>
+        <div class="col-auto">
+          <a class="btn btn-outline-secondary" href="/dashboard/platform/users">Réinitialiser</a>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <div class="card cs-tool-card mb-4">
     <div class="card-header">Créer un administrateur plateforme (mot de passe immédiat)</div>

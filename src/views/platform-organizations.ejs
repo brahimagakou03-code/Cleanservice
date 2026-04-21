@@ -12,6 +12,12 @@
 <div class="container py-4">
   <h1 class="h3 cs-page-title mb-2">Organisations franchisées</h1>
   <p class="text-muted small mb-4">Vue siège Clean Service : comptes métier distincts de l’administration plateforme.</p>
+  <% if (typeof teamSuccess !== "undefined" && teamSuccess) { %>
+    <div class="alert alert-success" role="alert"><%= teamSuccess %></div>
+  <% } %>
+  <% if (typeof teamAlert !== "undefined" && teamAlert) { %>
+    <div class="alert alert-warning" role="alert"><%= teamAlert %></div>
+  <% } %>
 
   <div class="card cs-tool-card mb-4">
     <div class="card-body p-0">
@@ -24,16 +30,24 @@
               <th>SIRET</th>
               <th class="text-end">Utilisateurs</th>
               <th class="text-end">Clients portail</th>
+              <th class="text-end">Actions</th>
             </tr>
           </thead>
           <tbody>
             <% (organizations || []).forEach(function(o) { %>
               <tr>
-                <td class="fw-medium"><%= o.name %></td>
+                <td class="fw-medium">
+                  <form method="POST" action="/dashboard/platform/organizations/<%= o.id %>/name" class="d-flex gap-2 align-items-center">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                    <input class="form-control form-control-sm" name="name" value="<%= o.name %>" required style="min-width:14rem" />
+                    <button type="submit" class="btn btn-sm btn-outline-primary">Renommer</button>
+                  </form>
+                </td>
                 <td><code><%= o.slug %></code></td>
                 <td><%= o.siret %></td>
                 <td class="text-end"><%= o._count && o._count.users != null ? o._count.users : "—" %></td>
                 <td class="text-end"><%= o._count && o._count.customers != null ? o._count.customers : "—" %></td>
+                <td class="text-end small text-muted">Le nouveau nom est visible partout.</td>
               </tr>
             <% }) %>
           </tbody>
