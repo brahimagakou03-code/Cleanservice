@@ -123,15 +123,7 @@
                 <td class="fw-medium"><%= m.firstName %> <%= m.lastName %></td>
                 <td><%= m.email %></td>
                 <td>
-                  <form method="POST" action="/dashboard/platform/users/<%= m.id %>/role" class="d-flex flex-wrap align-items-center gap-2">
-                    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-                    <select class="form-select form-select-sm" name="role" style="max-width:14rem">
-                      <% (assignableRoles || []).forEach(function(r) { %>
-                        <option value="<%= r %>" <%= m.role === r ? "selected" : "" %>><%= fr.role(r) %></option>
-                      <% }) %>
-                    </select>
-                    <button type="submit" class="btn btn-sm btn-outline-primary">Mettre à jour</button>
-                  </form>
+                  <span class="badge text-bg-primary"><%= fr.role("PLATFORM_ADMIN") %></span>
                 </td>
                 <td>
                   <% if (m.isActive) { %>
