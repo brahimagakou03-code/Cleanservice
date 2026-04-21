@@ -58,6 +58,7 @@ function requirePlatformAdmin(req, res, next) {
 function platformUsersAlertFromQuery(req) {
   const err = typeof req.query.err === "string" ? req.query.err : "";
   const ok = typeof req.query.ok === "string" ? req.query.ok : "";
+  const detail = typeof req.query.detail === "string" ? req.query.detail : "";
   if (ok === "platform_created") return { type: "success", text: "Compte siège créé avec mot de passe." };
   if (ok === "platform_invited") return { type: "success", text: "Invitation siège envoyée." };
   if (ok === "platform_updated") return { type: "success", text: "Rôle et accès mis à jour." };
@@ -72,7 +73,13 @@ function platformUsersAlertFromQuery(req) {
   if (err === "email_exists") return { type: "warning", text: "Cet e-mail est déjà utilisé." };
   if (err === "auth_exists") return { type: "warning", text: "Un compte Auth existe déjà pour cet e-mail." };
   if (err === "auth_create") return { type: "warning", text: "Création du compte Auth impossible." };
-  if (err === "db_create") return { type: "warning", text: "Compte Auth créé mais enregistrement interne impossible." };
+  if (err === "db_create")
+    return {
+      type: "warning",
+      text: detail
+        ? `Enregistrement interne impossible : ${detail}`
+        : "Compte Auth créé mais enregistrement interne impossible.",
+    };
   if (err === "org") return { type: "warning", text: "Organisation boutique introuvable." };
   if (err === "not_found") return { type: "warning", text: "Compte admin boutique introuvable." };
   if (err === "delete") return { type: "warning", text: "Suppression impossible pour ce compte." };
@@ -482,7 +489,7 @@ router.post("/platform/auth-users/attach-shop-admin", requirePlatformAdmin, asyn
     withSkipTenant(() =>
       prisma.user.findFirst({
         where: { email: { equals: emailNorm, mode: "insensitive" } },
-        select: { id: true, firstName: true, lastName: true },
+        select: { id: true, firstName: true, lastName: true, authUid: true },
       }),
     ),
   ]);
@@ -509,10 +516,14 @@ router.post("/platform/auth-users/attach-shop-admin", requirePlatformAdmin, asyn
     const existingUserByAuthUid = await withSkipTenant(() =>
       prisma.user.findFirst({
         where: { authUid },
-        select: { id: true, firstName: true, lastName: true },
+        select: { id: true, firstName: true, lastName: true, email: true },
       }),
     );
-    const target = existingUserByAuthUid || existingUserByEmail;
+    const target = existingUserByEmail || existingUserByAuthUid;
+    const hasConflictingPair =
+      Boolean(existingUserByEmail?.id) &&
+      Boolean(existingUserByAuthUid?.id) &&
+      existingUserByEmail.id !== existingUserByAuthUid.id;
     if (target?.id) {
       await withSkipTenant(() =>
         prisma.user.update({
@@ -521,7 +532,7 @@ router.post("/platform/auth-users/attach-shop-admin", requirePlatformAdmin, asyn
             email: emailNorm,
             role: Role.ADMIN,
             organizationId: org.id,
-            authUid,
+            ...(hasConflictingPair ? {} : { authUid }),
             isActive: true,
             firstName: target.firstName || firstName,
             lastName: target.lastName || lastName,
@@ -543,8 +554,18 @@ router.post("/platform/auth-users/attach-shop-admin", requirePlatformAdmin, asyn
         }),
       );
     }
-  } catch {
-    return res.redirect("/dashboard/platform/users?err=db_create");
+  } catch (e) {
+    const detail = encodeURIComponent(String(e?.message || "erreur interne"));
+    return res.redirect(`/dashboard/platform/users?err=db_create&detail=${detail}`);
+  }
+  const hasConflictingPair =
+    Boolean(existingUserByEmail?.id) &&
+    Boolean(existingUserByEmail?.authUid) &&
+    existingUserByEmail.authUid !== authUid;
+  if (hasConflictingPair) {
+    return res.redirect(
+      "/dashboard/platform/users?ok=shop_attached_auth&err=db_create&detail=Compte+rattache+sans+changer+authUid+(doublon+authUid+detecte).",
+    );
   }
   return res.redirect("/dashboard/platform/users?ok=shop_attached_auth");
 });
