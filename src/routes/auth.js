@@ -714,11 +714,35 @@ router.post("/register/verify-otp", registerOtpLimiter, async (req, res) => {
 async function renderStaffLoginPage(req, res, portalTarget, pageTitle, pageSubtitle) {
   if (await redirectIfAlreadyAuthenticated(req, res, portalTarget)) return;
   const err = typeof req.query.err === "string" ? req.query.err : "";
-  return res.render("login", {
-    loginAlert: loginAlertFromErr(err),
+  const loginAlert = loginAlertFromErr(err);
+  const pageData = {
+    loginAlert,
     pageTitle,
     pageSubtitle,
     loginAction: portalTarget === "superadmin" ? "/super-admin/login" : "/admin/login",
+  };
+  return res.render("login", pageData, (renderErr, html) => {
+    if (!renderErr) return res.send(html);
+    const safeTitle = String(pageTitle || "Connexion").replace(/</g, "&lt;");
+    const safeSubtitle = String(pageSubtitle || "").replace(/</g, "&lt;");
+    const safeAlert = String(loginAlert || "Erreur d'affichage temporaire.").replace(/</g, "&lt;");
+    return res.status(200).send(`<!doctype html>
+<html lang="fr">
+<head><meta charset="UTF-8"><title>${safeTitle}</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"></head>
+<body class="bg-light">
+<div class="container py-5" style="max-width:540px;">
+  <h1 class="h3 text-center mb-3">${safeTitle}</h1>
+  <p class="small text-muted text-center mb-3">${safeSubtitle}</p>
+  <div class="alert alert-warning mb-3" role="alert">${safeAlert}</div>
+  <form method="POST" action="${pageData.loginAction}" class="card p-3">
+    <label class="form-label">E-mail <input class="form-control" type="email" name="email" required /></label><br />
+    <label class="form-label">Mot de passe <input class="form-control" type="password" name="password" /></label><br />
+    <label class="form-label">Code client (optionnel)<input class="form-control" type="text" name="code" /></label><br />
+    <button class="btn btn-primary" type="submit">Se connecter</button>
+  </form>
+</div>
+</body>
+</html>`);
   });
 }
 
