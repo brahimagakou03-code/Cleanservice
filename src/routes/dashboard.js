@@ -65,6 +65,7 @@ function platformUsersAlertFromQuery(req) {
   if (ok === "shop_reassigned") return { type: "success", text: "Affectation boutique mise à jour." };
   if (ok === "shop_created") return { type: "success", text: "Compte admin boutique créé." };
   if (ok === "shop_deleted") return { type: "success", text: "Accès admin boutique supprimé." };
+  if (ok === "shop_attached_auth") return { type: "success", text: "Compte Auth rattaché en admin boutique." };
   if (err === "champs") return { type: "warning", text: "Merci de remplir les champs obligatoires." };
   if (err === "password") return { type: "warning", text: "Mot de passe invalide (minimum 8 caractères)." };
   if (err === "mismatch") return { type: "warning", text: "Les mots de passe ne correspondent pas." };
@@ -77,6 +78,7 @@ function platformUsersAlertFromQuery(req) {
   if (err === "delete") return { type: "warning", text: "Suppression impossible pour ce compte." };
   if (err === "self_demote") return { type: "warning", text: "Vous ne pouvez pas retirer votre propre accès super admin." };
   if (err === "invalid_role") return { type: "warning", text: "Rôle invalide pour cette action." };
+  if (err === "auth_missing") return { type: "warning", text: "Compte introuvable dans Supabase Auth." };
   return null;
 }
 
@@ -461,6 +463,67 @@ router.post("/platform/shop-admins/create", requirePlatformAdmin, async (req, re
     return res.redirect("/dashboard/platform/users?err=db_create");
   }
   return res.redirect("/dashboard/platform/users?ok=shop_created");
+});
+
+router.post("/platform/auth-users/attach-shop-admin", requirePlatformAdmin, async (req, res) => {
+  const emailNorm = String(req.body?.email || "")
+    .trim()
+    .toLowerCase();
+  const organizationId = String(req.body?.organizationId || "").trim();
+  if (!emailNorm || !organizationId) return res.redirect("/dashboard/platform/users?err=champs");
+
+  const [org, existingUser] = await Promise.all([
+    withSkipTenant(() =>
+      prisma.organization.findFirst({
+        where: { id: organizationId, isPlatform: false },
+        select: { id: true },
+      }),
+    ),
+    withSkipTenant(() =>
+      prisma.user.findFirst({
+        where: { email: { equals: emailNorm, mode: "insensitive" } },
+        select: { id: true },
+      }),
+    ),
+  ]);
+  if (!org) return res.redirect("/dashboard/platform/users?err=org");
+  if (existingUser) return res.redirect("/dashboard/platform/users?err=email_exists");
+
+  const svc = createSupabaseServiceClient();
+  if (!svc) return res.status(503).send("Supabase (SUPABASE_SERVICE_ROLE_KEY) non configure.");
+  let authUid = null;
+  try {
+    const { data, error } = await svc.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    if (error) throw error;
+    const hit = (data?.users || []).find((u) => String(u?.email || "").trim().toLowerCase() === emailNorm);
+    authUid = hit?.id || null;
+  } catch {
+    return res.redirect("/dashboard/platform/users?err=auth_missing");
+  }
+  if (!authUid) return res.redirect("/dashboard/platform/users?err=auth_missing");
+
+  const localPart = emailNorm.split("@")[0] || "Admin";
+  const firstName = String(req.body?.firstName || "").trim() || localPart.slice(0, 1).toUpperCase() + localPart.slice(1);
+  const lastName = String(req.body?.lastName || "").trim() || "Boutique";
+
+  try {
+    await withSkipTenant(() =>
+      prisma.user.create({
+        data: {
+          email: emailNorm,
+          firstName,
+          lastName,
+          role: Role.ADMIN,
+          organizationId: org.id,
+          authUid,
+          passwordHash: null,
+        },
+      }),
+    );
+  } catch {
+    return res.redirect("/dashboard/platform/users?err=db_create");
+  }
+  return res.redirect("/dashboard/platform/users?ok=shop_attached_auth");
 });
 
 router.post("/platform/users/:id/role", requirePlatformAdmin, async (req, res) => {

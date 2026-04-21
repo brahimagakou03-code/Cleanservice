@@ -60,6 +60,7 @@ function urlencodedTypeMatcher(req) {
     /^\/dashboard\/platform\/organizations\/[^/]+\/name$/.test(p) ||
     p === "/dashboard/platform/users/create" ||
     p === "/dashboard/platform/shop-admins/create" ||
+    p === "/dashboard/platform/auth-users/attach-shop-admin" ||
     /^\/dashboard\/platform\/shop-admins\/[^/]+\/delete$/.test(p) ||
     /^\/dashboard\/platform\/shop-admins\/[^/]+\/assign$/.test(p) ||
     /^\/dashboard\/platform\/users\/[^/]+\/role$/.test(p) ||
@@ -98,6 +99,7 @@ app.use(
         /^\/dashboard\/platform\/organizations\/[^/]+\/name$/.test(p) ||
         p === "/dashboard/platform/users/create" ||
         p === "/dashboard/platform/shop-admins/create" ||
+        p === "/dashboard/platform/auth-users/attach-shop-admin" ||
         /^\/dashboard\/platform\/shop-admins\/[^/]+\/delete$/.test(p) ||
         /^\/dashboard\/platform\/shop-admins\/[^/]+\/assign$/.test(p) ||
         /^\/dashboard\/platform\/users\/[^/]+\/role$/.test(p) ||

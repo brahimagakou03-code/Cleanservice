@@ -131,6 +131,7 @@
               <th>Organisations</th>
               <th>Type de compte</th>
               <th>Statut</th>
+              <th class="text-end">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -141,11 +142,28 @@
                 <td><%= a.organizations %></td>
                 <td><%= a.accountTypeLabel %></td>
                 <td><span class="badge <%= a.statusLabel === "Actif" ? "text-bg-success" : "text-bg-secondary" %>"><%= a.statusLabel %></span></td>
+                <td class="text-end">
+                  <% if (a.accountTypeLabel === "à affecter") { %>
+                    <form method="POST" action="/dashboard/platform/auth-users/attach-shop-admin" class="d-inline">
+                      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                      <input type="hidden" name="email" value="<%= a.email %>" />
+                      <select class="form-select form-select-sm d-inline-block" name="organizationId" style="max-width:11rem" required>
+                        <option value="">Boutique...</option>
+                        <% (organizations || []).forEach(function(org) { %>
+                          <option value="<%= org.id %>"><%= org.name %></option>
+                        <% }) %>
+                      </select>
+                      <button type="submit" class="btn btn-sm btn-outline-primary">Rattacher</button>
+                    </form>
+                  <% } else { %>
+                    <span class="text-muted small">—</span>
+                  <% } %>
+                </td>
               </tr>
             <% }) %>
             <% if (!allAccounts || !allAccounts.length) { %>
               <tr>
-                <td colspan="5" class="text-muted">Aucun compte trouvé pour ce filtre.</td>
+                <td colspan="6" class="text-muted">Aucun compte trouvé pour ce filtre.</td>
               </tr>
             <% } %>
           </tbody>
