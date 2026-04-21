@@ -4,7 +4,7 @@ const { can, Role } = require("../utils/rbac");
 const { enqueueEmail } = require("../utils/emailQueue");
 const { teamInvitationTemplate } = require("../utils/emailTemplates");
 const { createSupabaseServiceClient } = require("../lib/supabase");
-const { inviteStaffSupabaseUser, getAppBaseUrl } = require("../utils/supabaseAuth");
+const { inviteStaffSupabaseUser, getAppBaseUrl, isAlreadyRegisteredError } = require("../utils/supabaseAuth");
 const { orderStatusLabel } = require("../middleware/i18nFr");
 const { canApprove, STATUS: ORDER_STATUS } = require("../utils/orders");
 
@@ -72,11 +72,103 @@ router.get("/platform/organizations", requirePlatformAdmin, async (req, res, nex
 
 router.get("/platform/users", requirePlatformAdmin, async (req, res) => {
   const members = await prisma.user.findMany({ orderBy: { createdAt: "asc" } });
+  const err = typeof req.query.err === "string" ? req.query.err : "";
+  const ok = req.query.ok === "1";
+  let teamAlert = null;
+  let teamSuccess = null;
+  if (ok) {
+    teamSuccess = "Compte administrateur créé avec mot de passe.";
+  } else if (err === "champs") {
+    teamAlert = "Merci de remplir les champs obligatoires.";
+  } else if (err === "password") {
+    teamAlert = "Mot de passe invalide (minimum 8 caractères).";
+  } else if (err === "mismatch") {
+    teamAlert = "Les mots de passe ne correspondent pas.";
+  } else if (err === "email_exists") {
+    teamAlert = "Cet e-mail est déjà utilisé.";
+  } else if (err === "auth_exists") {
+    teamAlert = "Un compte Auth existe déjà pour cet e-mail.";
+  } else if (err === "auth_create") {
+    teamAlert = "Création du compte Auth impossible.";
+  } else if (err === "db_create") {
+    teamAlert = "Compte Auth créé mais enregistrement interne impossible. Vérifiez la base.";
+  }
   return res.render("platform-team", {
     members,
     assignableRoles: getAssignablePlatformRoles(),
     isPlatformContext: true,
+    teamAlert,
+    teamSuccess,
   });
+});
+
+router.post("/platform/users/create", requirePlatformAdmin, async (req, res) => {
+  const { email, firstName, lastName, role, password, passwordConfirm } = req.body || {};
+  const allowed = getAssignablePlatformRoles();
+  const safeRole = allowed.includes(role) ? role : allowed[0];
+  const emailNorm = String(email || "").trim().toLowerCase();
+  const pwd = String(password || "");
+  const pwdConfirm = String(passwordConfirm || "");
+  if (!emailNorm || !pwd || !pwdConfirm) {
+    return res.redirect("/dashboard/platform/users?err=champs");
+  }
+  if (pwd.length < 8) {
+    return res.redirect("/dashboard/platform/users?err=password");
+  }
+  if (pwd !== pwdConfirm) {
+    return res.redirect("/dashboard/platform/users?err=mismatch");
+  }
+  if (!canInviteTenantMembers(req.user.role)) {
+    return res.status(403).send("Droits insuffisants pour créer un compte.");
+  }
+
+  const existingUser = await prisma.user.findFirst({
+    where: { email: { equals: emailNorm, mode: "insensitive" } },
+    select: { id: true },
+  });
+  if (existingUser) {
+    return res.redirect("/dashboard/platform/users?err=email_exists");
+  }
+
+  const svc = createSupabaseServiceClient();
+  if (!svc) {
+    return res.status(503).send("Supabase (SUPABASE_SERVICE_ROLE_KEY) non configure.");
+  }
+
+  const { data: created, error: createErr } = await svc.auth.admin.createUser({
+    email: emailNorm,
+    password: pwd,
+    email_confirm: true,
+  });
+  if (createErr || !created?.user?.id) {
+    if (isAlreadyRegisteredError(createErr)) {
+      return res.redirect("/dashboard/platform/users?err=auth_exists");
+    }
+    return res.redirect("/dashboard/platform/users?err=auth_create");
+  }
+
+  try {
+    await prisma.user.create({
+      data: {
+        email: emailNorm,
+        firstName: String(firstName || "").trim() || "Admin",
+        lastName: String(lastName || "").trim() || "Plateforme",
+        role: safeRole,
+        organizationId: req.user.organizationId,
+        authUid: created.user.id,
+        passwordHash: null,
+      },
+    });
+  } catch (error) {
+    try {
+      await svc.auth.admin.deleteUser(created.user.id);
+    } catch (_) {
+      /* ignore */
+    }
+    return res.redirect("/dashboard/platform/users?err=db_create");
+  }
+
+  return res.redirect("/dashboard/platform/users?ok=1");
 });
 
 router.post("/platform/users/invite", requirePlatformAdmin, async (req, res) => {
@@ -96,7 +188,7 @@ router.post("/platform/users/invite", requirePlatformAdmin, async (req, res) => 
     return res.status(503).send("Supabase (SUPABASE_SERVICE_ROLE_KEY) non configure.");
   }
 
-  const invite = await inviteStaffSupabaseUser(emailNorm, { redirectPath: "/login" });
+  const invite = await inviteStaffSupabaseUser(emailNorm, { redirectPath: "/super-admin/login" });
   if (!invite.ok) {
     return res.status(400).send(`Compte Auth : ${invite.error}`);
   }
@@ -127,7 +219,7 @@ router.post("/platform/users/invite", requirePlatformAdmin, async (req, res) => 
   const base = getAppBaseUrl();
   const tpl = teamInvitationTemplate({
     firstName: firstName || "Utilisateur",
-    inviteLink: `${base}/login`,
+    inviteLink: `${base}/super-admin/login`,
     supabaseInviteSent: invite.sentInviteEmail,
     existingSupabaseAccount: invite.alreadyExisted,
   });
@@ -404,7 +496,7 @@ router.post("/settings/team/invite", async (req, res) => {
     return res.status(503).send("Supabase (SUPABASE_SERVICE_ROLE_KEY) non configure : invitation impossible.");
   }
 
-  const invite = await inviteStaffSupabaseUser(emailNorm, { redirectPath: "/login" });
+  const invite = await inviteStaffSupabaseUser(emailNorm, { redirectPath: "/admin/login" });
   if (!invite.ok) {
     return res.status(400).send(`Compte Auth : ${invite.error}`);
   }
@@ -435,7 +527,7 @@ router.post("/settings/team/invite", async (req, res) => {
   const base = getAppBaseUrl();
   const tpl = teamInvitationTemplate({
     firstName: firstName || "Utilisateur",
-    inviteLink: `${base}/login`,
+    inviteLink: `${base}/admin/login`,
     supabaseInviteSent: invite.sentInviteEmail,
     existingSupabaseAccount: invite.alreadyExisted,
   });
