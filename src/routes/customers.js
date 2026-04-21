@@ -16,8 +16,38 @@ const router = express.Router();
 /** Jeton jetable → mot de passe portail affiché une fois après génération (pas en session). */
 const portalCredentialsFlash = new Map();
 
+const CUSTOMER_SAFE_SELECT = {
+  id: true,
+  code: true,
+  companyName: true,
+  countryCode: true,
+  siret: true,
+  vatNumber: true,
+  email: true,
+  phone: true,
+  website: true,
+  notes: true,
+  paymentTerms: true,
+  isActive: true,
+  portalPasswordHash: true,
+  organizationId: true,
+  createdAt: true,
+  updatedAt: true,
+};
+
 function parseBool(value) {
   return value === "on" || value === "true" || value === true;
+}
+
+async function safeAttachCustomerAuthUid(customerId, authUid) {
+  if (!customerId || !authUid) return;
+  try {
+    await prisma.customer.update({ where: { id: customerId }, data: { authUid } });
+  } catch (err) {
+    const msg = String(err?.message || "");
+    if (msg.includes("Customer.authUid") && msg.includes("does not exist")) return;
+    throw err;
+  }
 }
 
 /** Chaque site client doit avoir organizationId (Prisma ne l'infère pas depuis le parent). */
@@ -127,7 +157,15 @@ router.get("/", async (req, res) => {
   const [items, total] = await Promise.all([
     prisma.customer.findMany({
       where,
-      include: { sites: true },
+      select: {
+        id: true,
+        code: true,
+        companyName: true,
+        email: true,
+        paymentTerms: true,
+        isActive: true,
+        sites: { select: { id: true } },
+      },
       orderBy: { [sortBy]: sortDir },
       skip: (page - 1) * pageSize,
       take: pageSize,
@@ -218,9 +256,7 @@ router.post("/", async (req, res) => {
   });
 
   const sup = await ensureCustomerSupabaseAuthUser(emailNorm, plainPortalPassword);
-  if (sup.ok) {
-    await prisma.customer.update({ where: { id: customer.id }, data: { authUid: sup.authUid } });
-  }
+  if (sup.ok) await safeAttachCustomerAuthUid(customer.id, sup.authUid);
 
   const baseUrl = process.env.APP_BASE_URL || "http://127.0.0.1:3000";
   const tpl = clientPortalCredentialsTemplate({
@@ -263,7 +299,8 @@ router.get("/:id", async (req, res, next) => {
   const siteError = typeof req.query.siteError === "string" ? req.query.siteError : "";
   const customer = await prisma.customer.findUnique({
     where: { id: req.params.id },
-    include: {
+    select: {
+      ...CUSTOMER_SAFE_SELECT,
       sites: true,
       priceLists: { include: { product: true } },
       _count: { select: { sites: true } },
@@ -400,7 +437,7 @@ router.post("/:id/portal-test-credentials", async (req, res, next) => {
   if (!(can(req.user.role, "clients:manage") || can(req.user.role, "*"))) {
     return res.status(403).send("Acces refuse");
   }
-  const customer = await prisma.customer.findUnique({ where: { id: req.params.id } });
+  const customer = await prisma.customer.findUnique({ where: { id: req.params.id }, select: { id: true, email: true } });
   if (!customer) return res.status(404).send("Client introuvable");
   const emailNorm = customer.email ? String(customer.email).trim().toLowerCase() : "";
   if (!emailNorm) {
@@ -412,11 +449,9 @@ router.post("/:id/portal-test-credentials", async (req, res, next) => {
   const sup = await ensureCustomerSupabaseAuthUser(emailNorm, plainPortalPassword);
   await prisma.customer.update({
     where: { id: customer.id },
-    data: {
-      portalPasswordHash,
-      ...(sup.ok ? { authUid: sup.authUid } : {}),
-    },
+    data: { portalPasswordHash },
   });
+  if (sup.ok) await safeAttachCustomerAuthUid(customer.id, sup.authUid);
 
   const key = crypto.randomUUID();
   portalCredentialsFlash.set(key, {
@@ -432,7 +467,10 @@ router.post("/:id/invite-portal", async (req, res) => {
   if (!(can(req.user.role, "clients:manage") || can(req.user.role, "*"))) {
     return res.status(403).send("Acces refuse");
   }
-  const customer = await prisma.customer.findUnique({ where: { id: req.params.id } });
+  const customer = await prisma.customer.findUnique({
+    where: { id: req.params.id },
+    select: { id: true, email: true, companyName: true, code: true },
+  });
   if (!customer) return res.status(404).send("Client introuvable");
   const emailNorm = customer.email ? String(customer.email).trim().toLowerCase() : "";
   if (!emailNorm) return res.status(400).send("Le client n'a pas d'e-mail : renseignez-le dans les informations generales.");
@@ -442,8 +480,9 @@ router.post("/:id/invite-portal", async (req, res) => {
   const sup = await ensureCustomerSupabaseAuthUser(emailNorm, plainPortalPassword);
   await prisma.customer.update({
     where: { id: customer.id },
-    data: { email: emailNorm, portalPasswordHash, ...(sup.ok ? { authUid: sup.authUid } : {}) },
+    data: { email: emailNorm, portalPasswordHash },
   });
+  if (sup.ok) await safeAttachCustomerAuthUid(customer.id, sup.authUid);
 
   const baseUrl = process.env.APP_BASE_URL || "http://127.0.0.1:3000";
   const tpl = clientPortalCredentialsTemplate({
@@ -463,7 +502,10 @@ router.post("/:id/invite-portal", async (req, res) => {
 });
 
 router.get("/export/csv", async (_req, res) => {
-  const customers = await prisma.customer.findMany({ include: { sites: true }, orderBy: { code: "asc" } });
+  const customers = await prisma.customer.findMany({
+    select: { code: true, companyName: true, email: true, phone: true, paymentTerms: true, isActive: true, sites: { select: { id: true } } },
+    orderBy: { code: "asc" },
+  });
   const rows = [
     "code,companyName,email,phone,paymentTerms,isActive,sitesCount",
     ...customers.map((c) =>
@@ -478,7 +520,10 @@ router.get("/export/csv", async (_req, res) => {
 });
 
 router.get("/export/xlsx", async (_req, res) => {
-  const customers = await prisma.customer.findMany({ include: { sites: true }, orderBy: { code: "asc" } });
+  const customers = await prisma.customer.findMany({
+    select: { code: true, companyName: true, email: true, phone: true, paymentTerms: true, isActive: true, sites: { select: { id: true } } },
+    orderBy: { code: "asc" },
+  });
   const data = customers.map((c) => ({
     code: c.code,
     companyName: c.companyName,

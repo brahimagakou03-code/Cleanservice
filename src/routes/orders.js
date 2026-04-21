@@ -16,6 +16,25 @@ const { applyStockOnStatusTransitionTx, reserveStocksForOrderTx } = require("../
 
 const router = express.Router();
 
+const CUSTOMER_SAFE_SELECT = {
+  id: true,
+  code: true,
+  companyName: true,
+  countryCode: true,
+  siret: true,
+  vatNumber: true,
+  email: true,
+  phone: true,
+  website: true,
+  notes: true,
+  paymentTerms: true,
+  isActive: true,
+  portalPasswordHash: true,
+  organizationId: true,
+  createdAt: true,
+  updatedAt: true,
+};
+
 function purchaseOrderContext(order) {
   const sortedLines = [...order.lines].sort((a, b) => Number(a.sortOrder) - Number(b.sortOrder));
   const lineRows = sortedLines.map((l) => ({
@@ -63,9 +82,15 @@ router.get("/", async (req, res) => {
   };
 
   const [orders, total, customers, footer] = await Promise.all([
-    prisma.order.findMany({ where, include: { customer: true }, orderBy: { createdAt: "desc" }, skip: (page - 1) * pageSize, take: pageSize }),
+    prisma.order.findMany({
+      where,
+      include: { customer: { select: { id: true, companyName: true } } },
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
     prisma.order.count({ where }),
-    prisma.customer.findMany({ orderBy: { companyName: "asc" } }),
+    prisma.customer.findMany({ select: { id: true, companyName: true }, orderBy: { companyName: "asc" } }),
     prisma.order.aggregate({ where, _sum: { totalHt: true, totalTva: true, totalTtc: true } }),
   ]);
 
@@ -103,7 +128,7 @@ router.get("/", async (req, res) => {
 });
 
 router.get("/new", async (_req, res) => {
-  const customers = await prisma.customer.findMany({ orderBy: { companyName: "asc" } });
+  const customers = await prisma.customer.findMany({ select: { id: true, companyName: true }, orderBy: { companyName: "asc" } });
   const products = await prisma.product.findMany({ orderBy: { name: "asc" } });
   return res.render("order-form", { customers, products, order: null });
 });
@@ -202,7 +227,12 @@ router.get("/:id", async (req, res, next) => {
   const order = await prisma.order.findUnique({
     where: { id: req.params.id },
     include: {
-      customer: { include: { sites: { orderBy: [{ isDefault: "desc" }, { label: "asc" }] } } },
+      customer: {
+        select: {
+          ...CUSTOMER_SAFE_SELECT,
+          sites: { orderBy: [{ isDefault: "desc" }, { label: "asc" }] },
+        },
+      },
       deliverySite: true,
       billingSite: true,
       lines: true,
@@ -352,7 +382,12 @@ router.get("/:id/pdf", async (req, res) => {
   const order = await prisma.order.findUnique({
     where: { id: req.params.id },
     include: {
-      customer: { include: { sites: { orderBy: [{ isDefault: "desc" }, { label: "asc" }] } } },
+      customer: {
+        select: {
+          ...CUSTOMER_SAFE_SELECT,
+          sites: { orderBy: [{ isDefault: "desc" }, { label: "asc" }] },
+        },
+      },
       deliverySite: true,
       billingSite: true,
       lines: true,
@@ -383,7 +418,12 @@ router.post("/:id/generate-invoice", async (req, res) => {
 
 router.get("/autocomplete/customers", async (req, res) => {
   const q = String(req.query.q || "");
-  const rows = await prisma.customer.findMany({ where: { companyName: { contains: q } }, take: 10, orderBy: { companyName: "asc" } });
+  const rows = await prisma.customer.findMany({
+    where: { companyName: { contains: q } },
+    select: { id: true, code: true, companyName: true, email: true },
+    take: 10,
+    orderBy: { companyName: "asc" },
+  });
   res.json(rows);
 });
 

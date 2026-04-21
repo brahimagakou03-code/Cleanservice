@@ -31,6 +31,12 @@
     Logo et favicon affichés sur la page d’accès, la connexion admin et l’espace client.
     Fichiers stockés en base (adapté à Netlify). Taille max. ~1,5 Mo par fichier.
   </p>
+  <% if (brandingUnavailable) { %>
+  <div class="alert alert-warning" role="alert">
+    Personnalisation temporairement indisponible : la table de branding n’existe pas encore sur cette base.
+    Le site continue de fonctionner avec le logo/favicon par défaut.
+  </div>
+  <% } %>
 
   <div class="card cs-tool-card mb-4">
     <div class="card-header d-flex justify-content-between align-items-center">

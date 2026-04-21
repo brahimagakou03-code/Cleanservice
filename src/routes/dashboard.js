@@ -739,11 +739,17 @@ function toDataUrl(buffer, mimetype) {
   return `data:${mt};base64,${buffer.toString("base64")}`;
 }
 
+function isPlatformBrandingTableMissing(err) {
+  const msg = String(err?.message || "");
+  return msg.includes("PlatformBranding") && msg.includes("does not exist");
+}
+
 router.get("/branding", async (req, res) => {
   if (!canManageBranding(req.user.role)) {
     return res.status(403).send("Accès réservé aux propriétaires et administrateurs.");
   }
   let row = null;
+  const brandingUnavailable = req.query.err === "branding_table_missing";
   try {
     row = await prisma.platformBranding.findUnique({ where: { id: BRANDING_SITE_ID } });
   } catch {
@@ -752,6 +758,7 @@ router.get("/branding", async (req, res) => {
   return res.render("branding-settings", {
     hasCustomLogo: Boolean(row?.logoDataUrl),
     hasCustomFavicon: Boolean(row?.faviconDataUrl),
+    brandingUnavailable,
   });
 });
 
@@ -767,11 +774,18 @@ router.post("/branding/logo", async (req, res) => {
     return res.status(400).send(e.message);
   }
   const dataUrl = toDataUrl(f.buffer, f.mimetype);
-  await prisma.platformBranding.upsert({
-    where: { id: BRANDING_SITE_ID },
-    create: { id: BRANDING_SITE_ID, logoDataUrl: dataUrl },
-    update: { logoDataUrl: dataUrl },
-  });
+  try {
+    await prisma.platformBranding.upsert({
+      where: { id: BRANDING_SITE_ID },
+      create: { id: BRANDING_SITE_ID, logoDataUrl: dataUrl },
+      update: { logoDataUrl: dataUrl },
+    });
+  } catch (err) {
+    if (isPlatformBrandingTableMissing(err)) {
+      return res.redirect("/dashboard/branding?err=branding_table_missing");
+    }
+    throw err;
+  }
   return res.redirect("/dashboard/branding");
 });
 
@@ -787,11 +801,18 @@ router.post("/branding/favicon", async (req, res) => {
     return res.status(400).send(e.message);
   }
   const dataUrl = toDataUrl(f.buffer, f.mimetype);
-  await prisma.platformBranding.upsert({
-    where: { id: BRANDING_SITE_ID },
-    create: { id: BRANDING_SITE_ID, faviconDataUrl: dataUrl },
-    update: { faviconDataUrl: dataUrl },
-  });
+  try {
+    await prisma.platformBranding.upsert({
+      where: { id: BRANDING_SITE_ID },
+      create: { id: BRANDING_SITE_ID, faviconDataUrl: dataUrl },
+      update: { faviconDataUrl: dataUrl },
+    });
+  } catch (err) {
+    if (isPlatformBrandingTableMissing(err)) {
+      return res.redirect("/dashboard/branding?err=branding_table_missing");
+    }
+    throw err;
+  }
   return res.redirect("/dashboard/branding");
 });
 
@@ -809,11 +830,18 @@ router.post("/branding/reset", async (req, res) => {
   } else {
     return res.status(400).send("Cible de réinitialisation invalide.");
   }
-  await prisma.platformBranding.upsert({
-    where: { id: BRANDING_SITE_ID },
-    create: { id: BRANDING_SITE_ID, ...data },
-    update: data,
-  });
+  try {
+    await prisma.platformBranding.upsert({
+      where: { id: BRANDING_SITE_ID },
+      create: { id: BRANDING_SITE_ID, ...data },
+      update: data,
+    });
+  } catch (err) {
+    if (isPlatformBrandingTableMissing(err)) {
+      return res.redirect("/dashboard/branding?err=branding_table_missing");
+    }
+    throw err;
+  }
   return res.redirect("/dashboard/branding");
 });
 

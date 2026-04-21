@@ -10,6 +10,24 @@ const { ensureCatalogProductImages, ensureImportCsvFile } = require("../middlewa
 const router = express.Router();
 const units = ["piece", "kilogramme", "litre", "metre", "heure", "carton", "palette"];
 const vatRates = ["20", "10", "5.5", "2.1", "0"];
+const CUSTOMER_SAFE_SELECT = {
+  id: true,
+  code: true,
+  companyName: true,
+  countryCode: true,
+  siret: true,
+  vatNumber: true,
+  email: true,
+  phone: true,
+  website: true,
+  notes: true,
+  paymentTerms: true,
+  isActive: true,
+  portalPasswordHash: true,
+  organizationId: true,
+  createdAt: true,
+  updatedAt: true,
+};
 
 function slugify(text) {
   return String(text).toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
@@ -167,7 +185,7 @@ router.get("/:id", async (req, res, next) => {
   if (["categories", "import", "export", "new"].includes(req.params.id)) return next();
   const product = await prisma.product.findFirst({
     where: { id: req.params.id, organizationId: req.user.organizationId },
-    include: { category: true, customerPrices: { include: { customer: true } } },
+    include: { category: true, customerPrices: { include: { customer: { select: CUSTOMER_SAFE_SELECT } } } },
   });
   if (!product) return res.status(404).send("Produit introuvable");
   const categories = await prisma.productCategory.findMany({ where: { organizationId: req.user.organizationId } });
@@ -210,7 +228,7 @@ router.post("/:id", ensureCatalogProductImages, async (req, res, next) => {
   } catch (error) {
     const product = await prisma.product.findFirst({
       where: { id: req.params.id, organizationId: req.user.organizationId },
-      include: { category: true, customerPrices: { include: { customer: true } } },
+      include: { category: true, customerPrices: { include: { customer: { select: CUSTOMER_SAFE_SELECT } } } },
     });
     if (!product) return res.status(404).send("Produit introuvable");
     const categories = await prisma.productCategory.findMany({ where: { organizationId: req.user.organizationId } });
@@ -322,6 +340,7 @@ router.get("/:id/customers-prices", async (req, res) => {
   if (!product) return res.status(404).json({ error: "Produit introuvable" });
   const customers = await prisma.customer.findMany({
     where: { organizationId: req.user.organizationId },
+    select: { id: true, companyName: true },
     orderBy: { companyName: "asc" },
   });
   const data = [];

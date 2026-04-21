@@ -16,6 +16,24 @@ const { invoiceSendTemplate } = require("../utils/emailTemplates");
 const { STATUS: ORDER_STATUS } = require("../utils/orders");
 
 const router = express.Router();
+const CUSTOMER_SAFE_SELECT = {
+  id: true,
+  code: true,
+  companyName: true,
+  countryCode: true,
+  siret: true,
+  vatNumber: true,
+  email: true,
+  phone: true,
+  website: true,
+  notes: true,
+  paymentTerms: true,
+  isActive: true,
+  portalPasswordHash: true,
+  organizationId: true,
+  createdAt: true,
+  updatedAt: true,
+};
 const ELIGIBLE_ORDER_STATUSES_FOR_INVOICE = [
   ORDER_STATUS.CONFIRMED,
   ORDER_STATUS.IN_PREPARATION,
@@ -97,8 +115,12 @@ router.get("/", async (req, res) => {
   startMonth.setDate(1);
   startMonth.setHours(0, 0, 0, 0);
   const [items, customers, totalInvoiced, totalPaid, totalOverdue] = await Promise.all([
-    prisma.invoice.findMany({ where, include: { customer: true }, orderBy: { createdAt: "desc" } }),
-    prisma.customer.findMany({ orderBy: { companyName: "asc" } }),
+    prisma.invoice.findMany({
+      where,
+      include: { customer: { select: { id: true, companyName: true } } },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.customer.findMany({ select: { id: true, companyName: true }, orderBy: { companyName: "asc" } }),
     prisma.invoice.aggregate({ where: { issuedAt: { gte: startMonth }, type: INVOICE_TYPE.INVOICE }, _sum: { totalTtc: true } }),
     prisma.payment.aggregate({ _sum: { amount: true } }),
     prisma.invoice.aggregate({ where: { status: INVOICE_STATUS.OVERDUE }, _sum: { amountDue: true } }),
@@ -121,7 +143,10 @@ router.get("/new", async (req, res) => {
   const customers = await prisma.customer.findMany({
     where: { organizationId: req.user.organizationId },
     orderBy: { companyName: "asc" },
-    include: { sites: { orderBy: [{ isDefault: "desc" }, { label: "asc" }] } },
+    select: {
+      ...CUSTOMER_SAFE_SELECT,
+      sites: { orderBy: [{ isDefault: "desc" }, { label: "asc" }] },
+    },
   });
   const eligibleOrders = await prisma.order.findMany({
     where: {
@@ -145,7 +170,7 @@ router.get("/new", async (req, res) => {
 router.post("/from-order/:orderId", async (req, res) => {
   const order = await prisma.order.findUnique({
     where: { id: req.params.orderId },
-    include: { customer: true, lines: true, billingSite: true, deliverySite: true },
+    include: { customer: { select: CUSTOMER_SAFE_SELECT }, lines: true, billingSite: true, deliverySite: true },
   });
   if (!order) return res.status(404).send("Commande introuvable");
   if (order.organizationId !== req.user.organizationId) return res.status(403).send("Acces refuse");
@@ -200,7 +225,7 @@ router.post("/from-order/:orderId", async (req, res) => {
 router.post("/", async (req, res) => {
   const lines = JSON.parse(req.body.linesJson || "[]");
   if (!lines.length) return res.status(400).send("Au moins une ligne requise");
-  const customer = await prisma.customer.findUnique({ where: { id: req.body.customerId } });
+  const customer = await prisma.customer.findUnique({ where: { id: req.body.customerId }, select: CUSTOMER_SAFE_SELECT });
   if (!customer) return res.status(400).send("Client introuvable");
   const selectedSite = await resolveSiteForCustomer(req.body.customerId, req.body.customerSiteId);
   const notesWithSite = composeNotesWithSite(req.body.notes || "", selectedSite);
@@ -242,12 +267,20 @@ router.post("/", async (req, res) => {
 router.get("/:id", async (req, res) => {
   const invoice = await prisma.invoice.findUnique({
     where: { id: req.params.id },
-    include: { customer: true, lines: true, payments: { orderBy: { paidAt: "desc" } }, originalInvoice: true },
+    include: {
+      customer: { select: CUSTOMER_SAFE_SELECT },
+      lines: true,
+      payments: { orderBy: { paidAt: "desc" } },
+      originalInvoice: true,
+    },
   });
   if (!invoice) return res.status(404).send("Facture introuvable");
   const customers = await prisma.customer.findMany({
     orderBy: { companyName: "asc" },
-    include: { sites: { orderBy: [{ isDefault: "desc" }, { label: "asc" }] } },
+    select: {
+      ...CUSTOMER_SAFE_SELECT,
+      sites: { orderBy: [{ isDefault: "desc" }, { label: "asc" }] },
+    },
   });
   const invoiceSite = readSiteMetadata(invoice.notes);
   const invoiceForView = { ...invoice, notes: stripSiteMetadata(invoice.notes) };
@@ -265,7 +298,7 @@ router.post("/:id/update", async (req, res) => {
   if (!invoice) return res.status(404).send("Facture introuvable");
   if (invoice.status !== INVOICE_STATUS.DRAFT) return res.status(400).send("Seul un brouillon peut etre modifie");
 
-  const customer = await prisma.customer.findUnique({ where: { id: req.body.customerId } });
+  const customer = await prisma.customer.findUnique({ where: { id: req.body.customerId }, select: CUSTOMER_SAFE_SELECT });
   if (!customer) return res.status(400).send("Client introuvable");
   const selectedSite = await resolveSiteForCustomer(req.body.customerId, req.body.customerSiteId);
   const notesWithSite = composeNotesWithSite(req.body.notes || "", selectedSite);
@@ -284,7 +317,10 @@ router.post("/:id/update", async (req, res) => {
 });
 
 router.post("/:id/finalize", async (req, res) => {
-  const invoice = await prisma.invoice.findUnique({ where: { id: req.params.id }, include: { lines: true, customer: true } });
+  const invoice = await prisma.invoice.findUnique({
+    where: { id: req.params.id },
+    include: { lines: true, customer: { select: CUSTOMER_SAFE_SELECT } },
+  });
   if (!invoice) return res.status(404).send("Facture introuvable");
   if (invoice.status !== INVOICE_STATUS.DRAFT) return res.status(400).send("Seul un brouillon peut etre finalise");
   const org = await prisma.organization.findUnique({ where: { id: req.user.organizationId } });
@@ -298,7 +334,7 @@ router.post("/:id/finalize", async (req, res) => {
     });
     return tx.invoice.findFirst({
       where: { id: invoice.id },
-      include: { lines: true, customer: true },
+      include: { lines: true, customer: { select: CUSTOMER_SAFE_SELECT } },
     });
   });
   if (!result?.customer || !result.lines) {
@@ -325,7 +361,10 @@ router.post("/:id/delete", async (req, res) => {
 });
 
 router.post("/:id/send-email", async (req, res) => {
-  const invoice = await prisma.invoice.findUnique({ where: { id: req.params.id }, include: { customer: true } });
+  const invoice = await prisma.invoice.findUnique({
+    where: { id: req.params.id },
+    include: { customer: { select: CUSTOMER_SAFE_SELECT } },
+  });
   if (!invoice || !invoice.number) return res.status(400).send("Facture non finalisee");
   await prisma.invoice.update({ where: { id: invoice.id }, data: { sentAt: new Date() } });
   const tpl = invoiceSendTemplate({
@@ -382,7 +421,10 @@ router.post("/:id/payment", async (req, res) => {
 });
 
 router.post("/:id/create-credit-note", async (req, res) => {
-  const invoice = await prisma.invoice.findUnique({ where: { id: req.params.id }, include: { lines: true, customer: true } });
+  const invoice = await prisma.invoice.findUnique({
+    where: { id: req.params.id },
+    include: { lines: true, customer: { select: CUSTOMER_SAFE_SELECT } },
+  });
   if (!invoice || !invoice.number) return res.status(400).send("Facture source invalide");
   const created = await prisma.invoice.create({
     data: {
