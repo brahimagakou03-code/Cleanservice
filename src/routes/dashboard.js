@@ -442,7 +442,7 @@ router.get("/", async (req, res) => {
     }),
     prisma.invoice.findMany({
       where: { organizationId: orgId, status: "PAID", type: "INVOICE" },
-      include: { customer: true },
+      include: { customer: { select: { id: true, companyName: true } } },
     }),
     prisma.order.groupBy({ by: ["status"], where: { organizationId: orgId }, _count: { status: true } }),
     prisma.orderLine.findMany({
@@ -451,23 +451,27 @@ router.get("/", async (req, res) => {
     }),
     prisma.order.findMany({
       where: { organizationId: orgId },
-      include: { customer: true },
+      include: { customer: { select: { id: true, companyName: true } } },
       orderBy: { createdAt: "desc" },
       take: 5,
     }),
     prisma.invoice.findMany({
       where: { organizationId: orgId, status: "OVERDUE" },
-      include: { customer: true },
+      include: { customer: { select: { id: true, companyName: true } } },
       orderBy: { dueAt: "asc" },
       take: 10,
     }),
     prisma.customer.findMany({
       where: { organizationId: orgId },
-      include: { orders: { orderBy: { createdAt: "desc" }, take: 1 } },
+      select: {
+        id: true,
+        companyName: true,
+        orders: { select: { createdAt: true }, orderBy: { createdAt: "desc" }, take: 1 },
+      },
     }),
     prisma.order.findMany({
       where: { organizationId: orgId, status: { in: DASHBOARD_TODO_STATUSES } },
-      include: { customer: true },
+      include: { customer: { select: { id: true, companyName: true } } },
       orderBy: { createdAt: "asc" },
       take: 40,
     }),
