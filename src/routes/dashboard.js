@@ -8,6 +8,7 @@ const {
   inviteStaffSupabaseUser,
   getAppBaseUrl,
   isAlreadyRegisteredError,
+  findAuthUserByEmail,
 } = require("../utils/supabaseAuth");
 const { orderStatusLabel } = require("../middleware/i18nFr");
 const { canApprove, STATUS: ORDER_STATUS } = require("../utils/orders");
@@ -197,13 +198,27 @@ router.get("/platform/users", requirePlatformAdmin, async (req, res) => {
   const supabaseSvc = createSupabaseServiceClient();
   if (supabaseSvc) {
     try {
-      const { data, error } = await supabaseSvc.auth.admin.listUsers({ page: 1, perPage: 1000 });
-      if (!error) {
-        for (const u of data?.users || []) {
+      const qLower = q.toLowerCase();
+      let page = 1;
+      const perPage = 200;
+      for (let i = 0; i < 25; i += 1) {
+        const { data, error } = await supabaseSvc.auth.admin.listUsers({ page, perPage });
+        if (error) break;
+        const users = data?.users || [];
+        for (const u of users) {
           const em = String(u?.email || "").trim().toLowerCase();
           if (!em) continue;
-          if (!q || em.includes(q.toLowerCase())) authOnlyEmails.add(em);
+          if (!q || em.includes(qLower)) authOnlyEmails.add(em);
         }
+        if (!users.length || users.length < perPage) break;
+        page += 1;
+      }
+      if (q.includes("@")) {
+        const exact = await findAuthUserByEmail(supabaseSvc, qLower.trim());
+        const em = String(exact?.email || "")
+          .trim()
+          .toLowerCase();
+        if (em) authOnlyEmails.add(em);
       }
     } catch {
       /* ignore */
@@ -497,15 +512,13 @@ router.post("/platform/auth-users/attach-shop-admin", requirePlatformAdmin, asyn
 
   const svc = createSupabaseServiceClient();
   if (!svc) return res.status(503).send("Supabase (SUPABASE_SERVICE_ROLE_KEY) non configure.");
-  let authUid = null;
+  let authHit = null;
   try {
-    const { data, error } = await svc.auth.admin.listUsers({ page: 1, perPage: 1000 });
-    if (error) throw error;
-    const hit = (data?.users || []).find((u) => String(u?.email || "").trim().toLowerCase() === emailNorm);
-    authUid = hit?.id || null;
+    authHit = await findAuthUserByEmail(svc, emailNorm);
   } catch {
     return res.redirect("/dashboard/platform/users?err=auth_missing");
   }
+  const authUid = authHit?.id || null;
   if (!authUid) return res.redirect("/dashboard/platform/users?err=auth_missing");
 
   const localPart = emailNorm.split("@")[0] || "Admin";
@@ -519,53 +532,51 @@ router.post("/platform/auth-users/attach-shop-admin", requirePlatformAdmin, asyn
         select: { id: true, firstName: true, lastName: true, email: true },
       }),
     );
-    const target = existingUserByEmail || existingUserByAuthUid;
-    const hasConflictingPair =
-      Boolean(existingUserByEmail?.id) &&
-      Boolean(existingUserByAuthUid?.id) &&
-      existingUserByEmail.id !== existingUserByAuthUid.id;
-    if (target?.id) {
-      await withSkipTenant(() =>
-        prisma.user.update({
-          where: { id: target.id },
-          data: {
-            email: emailNorm,
-            role: Role.ADMIN,
-            organizationId: org.id,
-            ...(hasConflictingPair ? {} : { authUid }),
-            isActive: true,
-            firstName: target.firstName || firstName,
-            lastName: target.lastName || lastName,
-          },
-        }),
-      );
-    } else {
-      await withSkipTenant(() =>
-        prisma.user.create({
-          data: {
-            email: emailNorm,
-            firstName,
-            lastName,
-            role: Role.ADMIN,
-            organizationId: org.id,
-            authUid,
-            passwordHash: null,
-          },
-        }),
-      );
-    }
+    const emailRow = existingUserByEmail;
+    const uidRow = existingUserByAuthUid;
+    const sameRow = Boolean(emailRow?.id && uidRow?.id && emailRow.id === uidRow.id);
+
+    await withSkipTenant(() =>
+      prisma.$transaction(async (tx) => {
+        if (emailRow?.id && uidRow?.id && !sameRow) {
+          await tx.user.update({
+            where: { id: uidRow.id },
+            data: { authUid: null },
+          });
+        }
+        const targetId = emailRow?.id || uidRow?.id;
+        if (targetId) {
+          const target = emailRow?.id === targetId ? emailRow : uidRow;
+          await tx.user.update({
+            where: { id: targetId },
+            data: {
+              email: emailNorm,
+              role: Role.ADMIN,
+              organizationId: org.id,
+              authUid,
+              isActive: true,
+              firstName: target.firstName || firstName,
+              lastName: target.lastName || lastName,
+            },
+          });
+        } else {
+          await tx.user.create({
+            data: {
+              email: emailNorm,
+              firstName,
+              lastName,
+              role: Role.ADMIN,
+              organizationId: org.id,
+              authUid,
+              passwordHash: null,
+            },
+          });
+        }
+      }),
+    );
   } catch (e) {
     const detail = encodeURIComponent(String(e?.message || "erreur interne"));
     return res.redirect(`/dashboard/platform/users?err=db_create&detail=${detail}`);
-  }
-  const hasConflictingPair =
-    Boolean(existingUserByEmail?.id) &&
-    Boolean(existingUserByEmail?.authUid) &&
-    existingUserByEmail.authUid !== authUid;
-  if (hasConflictingPair) {
-    return res.redirect(
-      "/dashboard/platform/users?ok=shop_attached_auth&err=db_create&detail=Compte+rattache+sans+changer+authUid+(doublon+authUid+detecte).",
-    );
   }
   return res.redirect("/dashboard/platform/users?ok=shop_attached_auth");
 });

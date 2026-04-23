@@ -108,7 +108,7 @@ function getAppBaseUrl() {
 async function findAuthUserByEmail(svc, emailNorm) {
   let page = 1;
   const perPage = 200;
-  for (let i = 0; i < 10; i += 1) {
+  for (let i = 0; i < 25; i += 1) {
     const { data: pageData, error: listErr } = await svc.auth.admin.listUsers({ page, perPage });
     if (listErr) return null;
     const users = pageData?.users || [];
@@ -203,4 +203,5 @@ module.exports = {
   isAlreadyRegisteredError,
   inviteStaffSupabaseUser,
   getAppBaseUrl,
+  findAuthUserByEmail,
 };
