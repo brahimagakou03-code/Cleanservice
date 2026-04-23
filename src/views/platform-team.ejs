@@ -11,7 +11,7 @@
 <%- include("partials/dashboard-header") %>
 <div class="container py-4">
   <h1 class="h3 cs-page-title mb-2">Administrateurs Clean Service</h1>
-  <p class="text-muted small mb-4">Créer les comptes administrateurs puis consulter une liste globale claire des accès.</p>
+  <p class="text-muted small mb-4">Créer des accès admin boutique et consulter la liste globale des comptes et de leurs accès.</p>
 
   <% if (typeof teamSuccess !== "undefined" && teamSuccess) { %>
     <div class="alert alert-success" role="alert"><%= teamSuccess %></div>
@@ -33,47 +33,6 @@
           <a class="btn btn-outline-secondary" href="/dashboard/platform/users">Réinitialiser</a>
         </div>
       </form>
-    </div>
-  </div>
-
-  <div class="card cs-tool-card mb-4">
-    <div class="card-header">Créer un administrateur plateforme (mot de passe immédiat)</div>
-    <div class="card-body">
-      <form method="POST" action="/dashboard/platform/users/create" class="row g-3 align-items-end">
-        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-        <div class="col-md-3">
-          <label class="form-label small fw-semibold">E-mail <span class="text-danger">*</span></label>
-          <input class="form-control" type="email" name="email" required placeholder="admin@clean-service.fr" />
-        </div>
-        <div class="col-md-2">
-          <label class="form-label small fw-semibold">Prénom</label>
-          <input class="form-control" name="firstName" placeholder="Prénom" />
-        </div>
-        <div class="col-md-2">
-          <label class="form-label small fw-semibold">Nom</label>
-          <input class="form-control" name="lastName" placeholder="Nom" />
-        </div>
-        <div class="col-md-2">
-          <label class="form-label small fw-semibold">Rôle</label>
-          <select class="form-select" name="role">
-            <% (assignableRoles || []).forEach(function(r) { %>
-              <option value="<%= r %>"><%= fr.role(r) %></option>
-            <% }) %>
-          </select>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small fw-semibold">Mot de passe <span class="text-danger">*</span></label>
-          <input class="form-control" type="password" name="password" required minlength="8" />
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small fw-semibold">Confirmer mot de passe <span class="text-danger">*</span></label>
-          <input class="form-control" type="password" name="passwordConfirm" required minlength="8" />
-        </div>
-        <div class="col-12">
-          <button type="submit" class="btn btn-success">Créer le compte admin</button>
-        </div>
-      </form>
-      <p class="small text-muted mt-2 mb-0">Ce mode crée directement le compte (Supabase Auth + utilisateur interne), sans e-mail d’invitation.</p>
     </div>
   </div>
 

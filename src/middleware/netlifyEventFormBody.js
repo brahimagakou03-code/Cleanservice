@@ -14,7 +14,6 @@ function netlifyEventFormBodyMerge(req, _res, next) {
       "/super-admin/login",
       "/register",
       "/portal/login",
-      "/dashboard/platform/users/create",
     ]);
     const isPlatformShopAdminsPath =
       pathname === "/dashboard/platform/shop-admins/create" ||

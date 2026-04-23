@@ -60,8 +60,6 @@ function platformUsersAlertFromQuery(req) {
   const err = typeof req.query.err === "string" ? req.query.err : "";
   const ok = typeof req.query.ok === "string" ? req.query.ok : "";
   const detail = typeof req.query.detail === "string" ? req.query.detail : "";
-  if (ok === "platform_created") return { type: "success", text: "Compte siège créé avec mot de passe." };
-  if (ok === "platform_invited") return { type: "success", text: "Invitation siège envoyée." };
   if (ok === "platform_updated") return { type: "success", text: "Rôle et accès mis à jour." };
   if (ok === "shop_assigned") return { type: "success", text: "Accès admin boutique attribué." };
   if (ok === "shop_reassigned") return { type: "success", text: "Affectation boutique mise à jour." };
@@ -283,143 +281,12 @@ router.get("/platform/users", requirePlatformAdmin, async (req, res) => {
   const flash = platformUsersAlertFromQuery(req);
   return res.render("platform-team", {
     organizations,
-    assignableRoles: getAssignablePlatformRoles(),
     isPlatformContext: true,
     userSearch: q,
     allAccounts,
     teamAlert: flash?.type === "warning" ? flash.text : null,
     teamSuccess: flash?.type === "success" ? flash.text : null,
   });
-});
-
-router.post("/platform/users/create", requirePlatformAdmin, async (req, res) => {
-  const { email, firstName, lastName, role, password, passwordConfirm } = req.body || {};
-  const allowed = getAssignablePlatformRoles();
-  const safeRole = allowed.includes(role) ? role : allowed[0];
-  const emailNorm = String(email || "").trim().toLowerCase();
-  const pwd = String(password || "");
-  const pwdConfirm = String(passwordConfirm || "");
-  if (!emailNorm || !pwd || !pwdConfirm) {
-    return res.redirect("/dashboard/platform/users?err=champs");
-  }
-  if (pwd.length < 8) {
-    return res.redirect("/dashboard/platform/users?err=password");
-  }
-  if (pwd !== pwdConfirm) {
-    return res.redirect("/dashboard/platform/users?err=mismatch");
-  }
-  if (!canInviteTenantMembers(req.user.role)) {
-    return res.status(403).send("Droits insuffisants pour créer un compte.");
-  }
-
-  const existingUser = await prisma.user.findFirst({
-    where: { email: { equals: emailNorm, mode: "insensitive" } },
-    select: { id: true },
-  });
-  if (existingUser) {
-    return res.redirect("/dashboard/platform/users?err=email_exists");
-  }
-
-  const svc = createSupabaseServiceClient();
-  if (!svc) {
-    return res.status(503).send("Supabase (SUPABASE_SERVICE_ROLE_KEY) non configure.");
-  }
-
-  const { data: created, error: createErr } = await svc.auth.admin.createUser({
-    email: emailNorm,
-    password: pwd,
-    email_confirm: true,
-  });
-  if (createErr || !created?.user?.id) {
-    if (isAlreadyRegisteredError(createErr)) {
-      return res.redirect("/dashboard/platform/users?err=auth_exists");
-    }
-    return res.redirect("/dashboard/platform/users?err=auth_create");
-  }
-
-  try {
-    await prisma.user.create({
-      data: {
-        email: emailNorm,
-        firstName: String(firstName || "").trim() || "Admin",
-        lastName: String(lastName || "").trim() || "Plateforme",
-        role: safeRole,
-        organizationId: req.user.organizationId,
-        authUid: created.user.id,
-        passwordHash: null,
-      },
-    });
-  } catch (error) {
-    try {
-      await svc.auth.admin.deleteUser(created.user.id);
-    } catch (_) {
-      /* ignore */
-    }
-    return res.redirect("/dashboard/platform/users?err=db_create");
-  }
-
-  return res.redirect("/dashboard/platform/users?ok=platform_created");
-});
-
-router.post("/platform/users/invite", requirePlatformAdmin, async (req, res) => {
-  const { email, firstName, lastName, role } = req.body;
-  const allowed = getAssignablePlatformRoles();
-  const safeRole = allowed.includes(role) ? role : allowed[0];
-  const emailNorm = String(email || "").trim().toLowerCase();
-  if (!emailNorm) {
-    return res.status(400).send("E-mail obligatoire.");
-  }
-  if (!canInviteTenantMembers(req.user.role)) {
-    return res.status(403).send("Droits insuffisants pour inviter.");
-  }
-
-  const svc = createSupabaseServiceClient();
-  if (!svc) {
-    return res.status(503).send("Supabase (SUPABASE_SERVICE_ROLE_KEY) non configure.");
-  }
-
-  const invite = await inviteStaffSupabaseUser(emailNorm, { redirectPath: "/super-admin/login" });
-  if (!invite.ok) {
-    return res.status(400).send(`Compte Auth : ${invite.error}`);
-  }
-
-  try {
-    await prisma.user.create({
-      data: {
-        email: emailNorm,
-        firstName: firstName || "Invite",
-        lastName: lastName || "User",
-        role: safeRole,
-        organizationId: req.user.organizationId,
-        authUid: invite.authUid,
-        passwordHash: null,
-      },
-    });
-  } catch (error) {
-    if (!invite.alreadyExisted) {
-      try {
-        await svc.auth.admin.deleteUser(invite.authUid);
-      } catch (_) {
-        /* ignore */
-      }
-    }
-    return res.status(400).send(`Invitation impossible: ${error.message}`);
-  }
-
-  const base = getAppBaseUrl();
-  const tpl = teamInvitationTemplate({
-    firstName: firstName || "Utilisateur",
-    inviteLink: `${base}/super-admin/login`,
-    supabaseInviteSent: invite.sentInviteEmail,
-    existingSupabaseAccount: invite.alreadyExisted,
-  });
-  await enqueueEmail({
-    organizationId: req.user.organizationId,
-    toEmail: emailNorm,
-    subject: tpl.subject,
-    html: tpl.html,
-  });
-  return res.redirect("/dashboard/platform/users?ok=platform_invited");
 });
 
 router.post("/platform/shop-admins/create", requirePlatformAdmin, async (req, res) => {
