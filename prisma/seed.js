@@ -2,6 +2,8 @@ const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcryptjs");
 const { computeOrderTotals } = require("../src/utils/orders");
 const { computeInvoiceTotals } = require("../src/utils/invoicing");
+const { createSupabaseServiceClient } = require("../src/lib/supabase");
+const { ensureStaffSupabaseAuthUser } = require("../src/utils/supabaseAuth");
 
 const prisma = new PrismaClient();
 
@@ -10,12 +12,29 @@ async function createOrgWithUsers(orgData, users) {
   const org = await prisma.organization.create({
     data: { ...rest, isPlatform: isPlatform === true },
   });
+  const svc = createSupabaseServiceClient();
   for (const user of users) {
-    const passwordHash = await bcrypt.hash(user.password, 12);
+    const emailNorm = String(user.email || "").trim().toLowerCase();
+    let authUid = null;
+    let passwordHash = null;
+    if (svc) {
+      const ensured = await ensureStaffSupabaseAuthUser(emailNorm, user.password);
+      if (ensured.ok) {
+        authUid = ensured.authUid;
+      } else {
+        console.warn(`[seed] Supabase Auth indisponible pour ${emailNorm}: ${ensured.error || "erreur"} — repli hash Prisma.`);
+      }
+    } else {
+      console.warn("[seed] SUPABASE_SERVICE_ROLE_KEY / SUPABASE_URL absents — utilisateurs sans entrée Authentication (repli hash Prisma).");
+    }
+    if (!authUid) {
+      passwordHash = await bcrypt.hash(user.password, 12);
+    }
     await prisma.user.create({
       data: {
-        email: user.email,
+        email: emailNorm,
         passwordHash,
+        authUid,
         firstName: user.firstName,
         lastName: user.lastName,
         role: user.role,
@@ -465,7 +484,7 @@ async function main() {
   const invoices = await prisma.invoice.count();
   const payments = await prisma.payment.count();
   console.log(
-    `Seed termine: 3 organisations (1 siège + 2 franchisés), 7 utilisateurs, ${customers} clients CRM, ${products} produits catalogue, ${orders} commandes, ${invoices} factures, ${payments} paiements. Connexion siège : platform@clean.test`,
+    `Seed termine: 3 organisations (1 siège + 2 franchisés), 7 utilisateurs, ${customers} clients CRM, ${products} produits catalogue, ${orders} commandes, ${invoices} factures, ${payments} paiements. Connexion siège : platform@clean.test (mot de passe seed commun : Password123!). Si Supabase est configure, chaque utilisateur seed a aussi une entree Authentication.`,
   );
 }
 
