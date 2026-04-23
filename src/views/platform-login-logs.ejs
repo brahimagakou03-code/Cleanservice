@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Journaux de connexion — Clean Service</title>
+  <%- include("partials/favicon") %>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="/public/styles/app.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+<%- include("partials/dashboard-header") %>
+<div class="container py-4">
+  <h1 class="h3 cs-page-title mb-2">Journaux de connexion</h1>
+  <p class="text-muted small mb-4">
+    Tentatives sur <strong>/admin/login</strong>, <strong>/super-admin/login</strong> et <strong>/portal/login</strong>.
+    La colonne <em>Étape bloquante</em> indique la dernière étape en échec ; dépliez une ligne pour voir le détail chronologique.
+  </p>
+
+  <% if (typeof tableMissing !== "undefined" && tableMissing) { %>
+    <div class="alert alert-warning" role="alert">
+      La table <code>AuthLoginAttempt</code> n’existe pas encore en base. Appliquez une migration Prisma
+      (<code>npx prisma migrate deploy</code>) ou exécutez le script SQL
+      <code>scripts/sql/create-auth-login-attempt.sql</code> dans Supabase, puis redéployez.
+    </div>
+  <% } %>
+
+  <div class="card cs-tool-card mb-4">
+    <div class="card-body py-3">
+      <form method="GET" action="/dashboard/platform/login-logs" class="row g-2 align-items-end flex-wrap">
+        <div class="col-auto">
+          <label class="form-label small fw-semibold mb-0">Portail</label>
+          <select class="form-select form-select-sm" name="portal">
+            <option value="all" <%= portalFilter === "all" ? "selected" : "" %>>Tous</option>
+            <option value="admin" <%= portalFilter === "admin" ? "selected" : "" %>>Admin boutique</option>
+            <option value="client" <%= portalFilter === "client" ? "selected" : "" %>>Client</option>
+            <option value="superadmin" <%= portalFilter === "superadmin" ? "selected" : "" %>>Super admin</option>
+          </select>
+        </div>
+        <div class="col-auto">
+          <label class="form-label small fw-semibold mb-0">Lignes</label>
+          <select class="form-select form-select-sm" name="limit">
+            <% [50, 100, 150, 250, 500].forEach(function(n) { %>
+              <option value="<%= n %>" <%= Number(take) === n ? "selected" : "" %>><%= n %></option>
+            <% }); %>
+          </select>
+        </div>
+        <div class="col-auto">
+          <button type="submit" class="btn btn-sm btn-outline-primary">Actualiser</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card cs-tool-card">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="cs-table-tools mb-0">
+          <thead>
+            <tr>
+              <th>Date (UTC serveur)</th>
+              <th>Portail</th>
+              <th>E-mail</th>
+              <th>Résultat</th>
+              <th>Code</th>
+              <th>Étape bloquante</th>
+              <th>IP</th>
+              <th class="text-end">Détail</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% const outcomeFr = {
+              success: "Réussi",
+              champs: "Champs incomplets",
+              auth: "Identifiants / Auth",
+              noprofile: "Sans profil métier",
+              forbidden_portal: "Mauvais portail",
+              provision: "Provisionnement Supabase",
+              code_court: "Mot de passe trop court",
+              config: "Config Supabase",
+              db: "Base injoignable",
+            }; %>
+            <% (attempts || []).forEach(function(a, idx) { %>
+              <tr class="<%= a.success ? "" : "table-warning" %>">
+                <td class="small text-nowrap"><%= a.createdAt ? new Date(a.createdAt).toLocaleString("fr-FR", { timeZone: "UTC" }) + " UTC" : "—" %></td>
+                <td><span class="badge text-bg-secondary"><%= a.portal %></span></td>
+                <td class="small"><%= a.email || "—" %></td>
+                <td>
+                  <% if (a.success) { %>
+                    <span class="badge text-bg-success">OK</span>
+                  <% } else { %>
+                    <span class="badge text-bg-danger">Échec</span>
+                  <% } %>
+                </td>
+                <td class="small"><%= outcomeFr[a.outcome] || a.outcome %></td>
+                <td class="small font-monospace"><%= a.stepFailed || "—" %></td>
+                <td class="small text-muted"><%= a.ip || "—" %></td>
+                <td class="text-end">
+                  <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#trace-<%= idx %>" aria-expanded="false">Étapes</button>
+                </td>
+              </tr>
+              <tr class="collapse" id="trace-<%= idx %>">
+                <td colspan="8" class="bg-white border-bottom small">
+                  <% if (a.detailMessage) { %>
+                    <p class="mb-2 text-danger"><strong>Message :</strong> <%= a.detailMessage %></p>
+                  <% } %>
+                  <% if (a.userAgent) { %>
+                    <p class="mb-2 text-muted"><strong>Navigateur :</strong> <%= a.userAgent %></p>
+                  <% } %>
+                  <ol class="mb-0 ps-3">
+                    <% (a.traceParsed || []).forEach(function(t) { %>
+                      <li>
+                        <span class="badge <%= t.status === "ok" ? "text-bg-success" : t.status === "fail" ? "text-bg-danger" : t.status === "skip" ? "text-bg-secondary" : "text-bg-info" %>"><%= t.status %></span>
+                        <code><%= t.step %></code>
+                        <% if (t.detail) { %> — <%= t.detail %><% } %>
+                      </li>
+                    <% }); %>
+                    <% if (!(a.traceParsed && a.traceParsed.length)) { %>
+                      <li class="text-muted">Aucune trace enregistrée.</li>
+                    <% } %>
+                  </ol>
+                </td>
+              </tr>
+            <% }); %>
+            <% if (!attempts || !attempts.length) { %>
+              <tr>
+                <td colspan="8" class="text-muted p-4 text-center">
+                  <% if (tableMissing) { %>Créez la table pour commencer à collecter les journaux.<% } else { %>Aucune tentative enregistrée pour ce filtre.<% } %>
+                </td>
+              </tr>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <p class="mt-4 mb-0 d-flex flex-wrap gap-2">
+    <a class="btn btn-outline-primary" href="/dashboard/platform/users">Équipe siège</a>
+    <a class="btn btn-outline-secondary" href="/dashboard/platform/organizations">Franchisés</a>
+  </p>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

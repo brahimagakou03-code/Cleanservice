@@ -440,3 +440,21 @@ model PlatformBranding {
   updatedAt      DateTime @updatedAt
 }
 
+/// Journal des tentatives de connexion (diagnostic siège). Hors filtre tenant.
+model AuthLoginAttempt {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now())
+  portal        String
+  email         String?
+  success       Boolean
+  outcome       String
+  stepFailed    String?
+  trace         String?  @db.Text
+  detailMessage String?  @db.Text
+  ip            String?
+  userAgent     String?
+
+  @@index([createdAt(sort: Desc)])
+  @@index([portal, createdAt(sort: Desc)])
+}
+

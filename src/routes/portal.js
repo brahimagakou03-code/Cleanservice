@@ -8,6 +8,7 @@ const { computeOrderTotals, STATUS, nextOrderNumber } = require("../utils/orders
 const { clearClientPortalCookie } = require("../utils/auth");
 const { createSupabaseRouteClient } = require("../utils/supabaseExpress");
 const { performUnifiedLogin } = require("../services/unifiedLogin");
+const { recordAuthLoginAttempt, clientIpFromReq } = require("../utils/authLoginAudit");
 const { requireClientPortalAuth } = require("../middleware/portalAuth");
 const { attachPortalNotifications } = require("../middleware/portalNotifications");
 const { TYPE, notifyUsersByRoles } = require("../utils/notifications");
@@ -238,6 +239,9 @@ function portalLoginErrorMessage(err) {
   }
   if (code === "noprofile") return "Aucun profil client actif n'est lié à ce compte.";
   if (code === "code_court") return "Code client trop court pour Supabase. Utilisez plutôt votre mot de passe.";
+  if (code === "provision") return "Provisionnement du compte Supabase impossible. Vérifiez la configuration serveur.";
+  if (code === "config") return "Configuration Supabase incomplète sur le serveur.";
+  if (code === "db") return "La base de données ne répond pas. Vérifiez DATABASE_URL et l’état du projet Supabase.";
   return "Connexion impossible. Vérifiez vos identifiants.";
 }
 
@@ -417,9 +421,31 @@ router.post("/login", portalLoginLimiter, async (req, res) => {
   const password = String(body.password || "");
   const code = String(body.code || "");
   if (!email || (!password && !code)) {
+    await recordAuthLoginAttempt({
+      portal: "client",
+      email: email || null,
+      success: false,
+      outcome: "champs",
+      stepFailed: "validate_input",
+      trace: [{ step: "validate_input", status: "fail", detail: "E-mail ou mot de passe/code manquant." }],
+      detailMessage: null,
+      ip: clientIpFromReq(req),
+      userAgent: req.get("user-agent") || "",
+    });
     return res.redirect(302, "/portal/login?err=champs");
   }
   const result = await performUnifiedLogin(req, res, { email, password, code, targetPortal: "client" });
+  await recordAuthLoginAttempt({
+    portal: "client",
+    email,
+    success: result.ok,
+    outcome: result.ok ? "success" : result.reason,
+    stepFailed: result.ok ? null : result.stepFailed || result.reason,
+    trace: result.trace || [],
+    detailMessage: result.message || null,
+    ip: clientIpFromReq(req),
+    userAgent: req.get("user-agent") || "",
+  });
   if (!result.ok) {
     const q = new URLSearchParams();
     if (result.reason === "champs") q.set("err", "champs");
@@ -427,6 +453,8 @@ router.post("/login", portalLoginLimiter, async (req, res) => {
     else if (result.reason === "code_court") q.set("err", "code_court");
     else if (result.reason === "noprofile") q.set("err", "noprofile");
     else if (result.reason === "forbidden_portal") q.set("err", "forbidden_portal");
+    else if (result.reason === "config") q.set("err", "config");
+    else if (result.reason === "db") q.set("err", "db");
     else q.set("err", "auth");
     return res.redirect(302, `/portal/login?${q.toString()}`);
   }

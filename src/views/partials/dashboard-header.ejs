@@ -25,6 +25,7 @@
         <% if (isPlatformOrg) { %>
         <li class="nav-item"><a class="nav-link cs-link <%= currentPath.startsWith('/dashboard/platform/organizations') ? 'active' : '' %>" href="/dashboard/platform/organizations">Franchisés</a></li>
         <li class="nav-item"><a class="nav-link cs-link <%= currentPath.startsWith('/dashboard/platform/users') ? 'active' : '' %>" href="/dashboard/platform/users">Équipe siège</a></li>
+        <li class="nav-item"><a class="nav-link cs-link <%= currentPath.startsWith('/dashboard/platform/login-logs') ? 'active' : '' %>" href="/dashboard/platform/login-logs">Journaux connexion</a></li>
         <li class="nav-item"><a class="nav-link cs-link <%= currentPath === '/dashboard' ? 'active' : '' %>" href="/dashboard">Synthèse siège</a></li>
         <% } else { %>
         <li class="nav-item"><a class="nav-link cs-link <%= currentPath === '/dashboard' ? 'active' : '' %>" href="/dashboard">Tableau de bord</a></li>

@@ -58,7 +58,7 @@ async function syncCustomerAuthUidIfSupported(customerId, authUid) {
 
 /**
  * Connexion unique (Supabase Auth) : e-mail + mot de passe ; code client optionnel (héritage).
- * @returns {{ ok: true, redirect: string } | { ok: false, reason: string }}
+ * @returns {{ ok: true, redirect: string, trace?: object[] } | { ok: false, reason: string, message?: string, trace?: object[], stepFailed?: string }}
  */
 function normalizeTargetPortal(targetPortal) {
   const p = String(targetPortal || "auto").trim().toLowerCase();
@@ -101,25 +101,55 @@ async function performUnifiedLogin(req, res, { email, password, code, targetPort
   const target = normalizeTargetPortal(targetPortal);
 
   if (!em || (!pwd && !cod)) {
-    return { ok: false, reason: "champs" };
+    return {
+      ok: false,
+      reason: "champs",
+      stepFailed: "validate_input",
+      trace: [
+        {
+          step: "validate_input",
+          status: "fail",
+          detail: "E-mail absent ou mot de passe et code client tous vides.",
+        },
+      ],
+    };
   }
 
   try {
     return await performUnifiedLoginInner(req, res, { email: em, password: pwd, code: cod, targetPortal: target });
   } catch (e) {
     if (isPrismaDbUnreachable(e)) {
-      return { ok: false, reason: "db", message: e.message };
+      return {
+        ok: false,
+        reason: "db",
+        message: e.message,
+        stepFailed: "database",
+        trace: [{ step: "database", status: "fail", detail: String(e.message || "").slice(0, 400) }],
+      };
     }
     throw e;
   }
 }
 
+function tracePush(trace, step, status, detail = "") {
+  trace.push({
+    step,
+    status,
+    detail: String(detail || "").slice(0, 500),
+  });
+}
+
 async function performUnifiedLoginInner(req, res, { email: em, password: pwd, code: cod, targetPortal }) {
+  const trace = [];
+  tracePush(trace, "start", "ok", `Portail demandé: ${targetPortal}, e-mail saisi (présent)`);
+
   let supabase;
   try {
     supabase = createSupabaseRouteClient(req, res);
+    tracePush(trace, "supabase_client", "ok", "Client Supabase route (cookies) créé.");
   } catch (e) {
-    return { ok: false, reason: "config", message: e.message };
+    tracePush(trace, "supabase_client", "fail", e.message);
+    return { ok: false, reason: "config", message: e.message, trace, stepFailed: "supabase_client" };
   }
 
   const tryPassword = pwd || (cod.length >= 6 ? cod : "");
@@ -132,84 +162,203 @@ async function performUnifiedLoginInner(req, res, { email: em, password: pwd, co
     });
     if (!error && data?.user) {
       authUser = data.user;
+      tracePush(trace, "supabase_signin_password", "ok", "Supabase Auth a accepté e-mail + mot de passe (ou code ≥6 car. utilisé comme mot de passe).");
+    } else {
+      tracePush(
+        trace,
+        "supabase_signin_password",
+        "fail",
+        error?.message || "Identifiants Supabase incorrects ou compte inexistant côté Auth.",
+      );
     }
+  } else {
+    tracePush(
+      trace,
+      "supabase_signin_password",
+      "skip",
+      "Aucun mot de passe utilisable pour Auth (mot de passe vide et code client absent ou < 6 car.).",
+    );
   }
 
   if (!authUser) {
     const localUser = await prisma.user.findFirst({
       where: { email: { equals: em, mode: "insensitive" } },
     });
-    if (localUser?.passwordHash && pwd && (await comparePassword(pwd, localUser.passwordHash))) {
+    if (!localUser) {
+      tracePush(trace, "staff_prisma_lookup", "info", "Aucun utilisateur interne (User) trouvé pour cet e-mail.");
+    } else if (!localUser.passwordHash) {
+      tracePush(trace, "staff_legacy_password", "skip", "Utilisateur interne trouvé mais sans passwordHash Prisma (connexion uniquement via Supabase).");
+    } else if (!pwd) {
+      tracePush(trace, "staff_legacy_password", "skip", "Mot de passe formulaire vide : impossible de vérifier le hash Prisma.");
+    } else if (!(await comparePassword(pwd, localUser.passwordHash))) {
+      tracePush(trace, "staff_legacy_password", "fail", "Mot de passe ne correspond pas au hash Prisma (héritage).");
+    } else {
+      tracePush(trace, "staff_legacy_password", "ok", "Mot de passe Prisma valide : provisionnement Auth Supabase…");
       const ensured = await ensureStaffSupabaseAuthUser(em, pwd);
       if (!ensured.ok) {
-        return { ok: false, reason: "provision", message: ensured.error };
+        tracePush(trace, "staff_supabase_provision", "fail", ensured.error || "Erreur ensureStaffSupabaseAuthUser.");
+        return {
+          ok: false,
+          reason: "provision",
+          message: ensured.error,
+          trace,
+          stepFailed: "staff_supabase_provision",
+        };
       }
+      tracePush(trace, "staff_supabase_provision", "ok", "Compte / lien Supabase staff prêt.");
       await prisma.user.update({ where: { id: localUser.id }, data: { authUid: ensured.authUid } });
       const { data, error } = await supabase.auth.signInWithPassword({ email: em, password: pwd });
       if (error || !data?.user) {
-        return { ok: false, reason: "auth", message: error?.message || "Connexion refusée." };
+        tracePush(trace, "staff_signin_after_provision", "fail", error?.message || "Connexion refusée après provision.");
+        return {
+          ok: false,
+          reason: "auth",
+          message: error?.message || "Connexion refusée.",
+          trace,
+          stepFailed: "staff_signin_after_provision",
+        };
       }
       authUser = data.user;
+      tracePush(trace, "staff_signin_after_provision", "ok", "Session Supabase obtenue après héritage Prisma.");
     }
   }
 
   if (!authUser) {
-    const hits = await prisma.customer.findMany({
-      where: { isActive: true, email: { equals: em, mode: "insensitive" } },
-      take: 1,
-    });
+    let hits = [];
+    try {
+      hits = await prisma.customer.findMany({
+        where: { isActive: true, email: { equals: em, mode: "insensitive" } },
+        take: 1,
+      });
+    } catch (err) {
+      tracePush(trace, "customer_lookup", "fail", String(err?.message || err));
+      return { ok: false, reason: "auth", trace, stepFailed: "customer_lookup" };
+    }
     const hit = hits[0];
-    if (hit) {
+    if (!hit) {
+      tracePush(trace, "customer_lookup", "info", "Aucun client actif (Customer) avec cet e-mail.");
+    } else {
+      tracePush(trace, "customer_lookup", "ok", `Client trouvé (id court: ${hit.id.slice(0, 8)}…).`);
       const customer = await prisma.customer.findUnique({ where: { id: hit.id } });
-      if (customer && (await portalCredentialsValid(customer, pwd, cod))) {
+      if (!customer) {
+        tracePush(trace, "customer_load", "fail", "Lecture Customer impossible.");
+      } else if (!(await portalCredentialsValid(customer, pwd, cod))) {
+        tracePush(
+          trace,
+          "customer_credentials",
+          "fail",
+          "Mot de passe portail et code client ne correspondent pas aux données enregistrées.",
+        );
+      } else {
+        tracePush(trace, "customer_credentials", "ok", "Code client et/ou mot de passe portail acceptés.");
         const plain = effectivePasswordForSupabase(pwd, cod, customer);
         if (plain.length < 6) {
+          tracePush(trace, "customer_password_policy", "fail", "Mot de passe dérivé pour Supabase < 6 caractères (exigence Supabase).");
           return {
             ok: false,
             reason: "code_court",
             message:
               "Mot de passe ou code trop court pour activer le compte (min. 6 caractères). Utilisez le mot de passe reçu par e-mail ou définissez-en un via votre fournisseur.",
+            trace,
+            stepFailed: "customer_password_policy",
           };
         }
         const ensured = await ensureCustomerSupabaseAuthUser(em, plain);
         if (!ensured.ok) {
-          return { ok: false, reason: "provision", message: ensured.error };
+          tracePush(trace, "customer_supabase_provision", "fail", ensured.error || "ensureCustomerSupabaseAuthUser");
+          return {
+            ok: false,
+            reason: "provision",
+            message: ensured.error,
+            trace,
+            stepFailed: "customer_supabase_provision",
+          };
         }
+        tracePush(trace, "customer_supabase_provision", "ok", "Utilisateur Auth client prêt / mis à jour.");
         await syncCustomerAuthUidIfSupported(customer.id, ensured.authUid);
         const { data, error } = await supabase.auth.signInWithPassword({ email: em, password: plain });
         if (error || !data?.user) {
-          return { ok: false, reason: "auth", message: error?.message || "Connexion refusée." };
+          tracePush(trace, "customer_signin_after_provision", "fail", error?.message || "Connexion refusée.");
+          return {
+            ok: false,
+            reason: "auth",
+            message: error?.message || "Connexion refusée.",
+            trace,
+            stepFailed: "customer_signin_after_provision",
+          };
         }
         authUser = data.user;
+        tracePush(trace, "customer_signin_after_provision", "ok", "Session Supabase obtenue pour le portail client.");
       }
     }
   }
 
   if (!authUser) {
-    return { ok: false, reason: "auth" };
+    tracePush(
+      trace,
+      "auth_user_resolution",
+      "fail",
+      "Impossible d'obtenir une session Supabase : combinaison e-mail / mot de passe / code non reconnue par aucune voie (Auth direct, staff Prisma, client).",
+    );
+    return { ok: false, reason: "auth", trace, stepFailed: "auth_user_resolution" };
   }
 
   const { data: verified } = await supabase.auth.getUser();
   const user = verified?.user || authUser;
+  tracePush(trace, "session_get_user", "ok", "Jeton session relu via getUser().");
+
   const identity = await resolveAppIdentity(user);
   if (!identity) {
     await supabase.auth.signOut();
-    return { ok: false, reason: "noprofile" };
+    tracePush(
+      trace,
+      "resolve_identity",
+      "fail",
+      "Supabase Auth OK mais aucune ligne User (staff) ni Customer (portail) active ne correspond à ce compte en base métier.",
+    );
+    return { ok: false, reason: "noprofile", trace, stepFailed: "resolve_identity" };
   }
+  tracePush(
+    trace,
+    "resolve_identity",
+    "ok",
+    identity.kind === "staff"
+      ? `Profil staff : rôle ${identity.user?.role || "?"}, org plateforme=${identity.user?.organization?.isPlatform === true}.`
+      : "Profil portail client (Customer) résolu.",
+  );
 
   const access = await resolveAppAccessProfiles(user);
+  const staff = access.staff;
+  const cust = access.customer;
+  tracePush(
+    trace,
+    "access_profiles",
+    "ok",
+    `Staff=${Boolean(staff)} (boutique=${staff && staff.organization?.isPlatform !== true}), Client=${Boolean(cust)}.`,
+  );
+
   if (!canAccessTargetPortal(access, targetPortal)) {
     await supabase.auth.signOut();
-    return { ok: false, reason: "forbidden_portal" };
+    tracePush(
+      trace,
+      "portal_eligibility",
+      "fail",
+      `Le portail « ${targetPortal} » refuse ce compte (droits ou type d organisation). Ex. admin boutique exige un User hors siège ; client exige un Customer.`,
+    );
+    return { ok: false, reason: "forbidden_portal", trace, stepFailed: "portal_eligibility" };
   }
+  tracePush(trace, "portal_eligibility", "ok", `Accès autorisé pour le portail « ${targetPortal} ».`);
 
   if (identity.kind === "staff") {
     await prisma.user.update({ where: { id: identity.user.id }, data: { lastLoginAt: new Date() } });
     const redirect = redirectForTargetPortal(access, targetPortal);
-    return { ok: true, redirect };
+    tracePush(trace, "redirect", "ok", `Redirection prévue : ${redirect}`);
+    return { ok: true, redirect, trace, stepFailed: null };
   }
 
-  return { ok: true, redirect: redirectForTargetPortal(access, targetPortal) };
+  const redirect = redirectForTargetPortal(access, targetPortal);
+  tracePush(trace, "redirect", "ok", `Redirection prévue : ${redirect}`);
+  return { ok: true, redirect, trace, stepFailed: null };
 }
 
 module.exports = { performUnifiedLogin, portalCredentialsValid, codesMatch };

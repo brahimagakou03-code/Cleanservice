@@ -10,6 +10,7 @@ const { mergeFormBody } = require("../utils/mergeFormBody");
 const { createSupabaseRouteClient, isSupabaseAuthConfigured } = require("../utils/supabaseExpress");
 const { resolveAppAccessProfiles, ensureStaffSupabaseAuthUser } = require("../utils/supabaseAuth");
 const { performUnifiedLogin } = require("../services/unifiedLogin");
+const { recordAuthLoginAttempt, clientIpFromReq } = require("../utils/authLoginAudit");
 
 const router = express.Router();
 const MAX_ADMIN_TEST_LOGS = 300;
@@ -751,11 +752,34 @@ async function handleStaffPortalLogin(req, res, portalTarget, errorBasePath) {
   const email = String(body.email || "").trim().toLowerCase();
   const password = String(body.password || "");
   const code = String(body.code || "");
+  const auditPortal = portalTarget === "superadmin" ? "superadmin" : "admin";
   if (!email || (!password && !code)) {
+    await recordAuthLoginAttempt({
+      portal: auditPortal,
+      email: email || null,
+      success: false,
+      outcome: "champs",
+      stepFailed: "validate_input",
+      trace: [{ step: "validate_input", status: "fail", detail: "E-mail ou mot de passe/code manquant." }],
+      detailMessage: null,
+      ip: clientIpFromReq(req),
+      userAgent: req.get("user-agent") || "",
+    });
     return res.redirect(302, `${errorBasePath}?err=champs`);
   }
 
   const result = await performUnifiedLogin(req, res, { email, password, code, targetPortal: portalTarget });
+  await recordAuthLoginAttempt({
+    portal: auditPortal,
+    email,
+    success: result.ok,
+    outcome: result.ok ? "success" : result.reason,
+    stepFailed: result.ok ? null : result.stepFailed || result.reason,
+    trace: result.trace || [],
+    detailMessage: result.message || null,
+    ip: clientIpFromReq(req),
+    userAgent: req.get("user-agent") || "",
+  });
   if (!result.ok) {
     const reason = [
       "champs",

@@ -45,6 +45,7 @@ const {
   canInviteTenantMembers,
   actorCanSetTenantRole,
 } = require("../utils/teamRoles");
+const { isAuthLoginAttemptTableMissing } = require("../utils/authLoginAudit");
 
 function requirePlatformAdmin(req, res, next) {
   if (!req.organization?.isPlatform) {
@@ -287,6 +288,50 @@ router.get("/platform/users", requirePlatformAdmin, async (req, res) => {
     teamAlert: flash?.type === "warning" ? flash.text : null,
     teamSuccess: flash?.type === "success" ? flash.text : null,
   });
+});
+
+router.get("/platform/login-logs", requirePlatformAdmin, async (req, res, next) => {
+  try {
+    const portalFilter = String(req.query.portal || "all").trim().toLowerCase();
+    const allowed = ["all", "admin", "client", "superadmin"];
+    const pf = allowed.includes(portalFilter) ? portalFilter : "all";
+    const take = Math.min(500, Math.max(20, parseInt(String(req.query.limit || "150"), 10) || 150));
+
+    let tableMissing = false;
+    let rows = [];
+    try {
+      rows = await withSkipTenant(() =>
+        prisma.authLoginAttempt.findMany({
+          where: pf === "all" ? {} : { portal: pf },
+          orderBy: { createdAt: "desc" },
+          take,
+        }),
+      );
+    } catch (e) {
+      if (isAuthLoginAttemptTableMissing(e)) tableMissing = true;
+      else throw e;
+    }
+
+    const attempts = rows.map((a) => {
+      let traceParsed = [];
+      try {
+        traceParsed = a.trace ? JSON.parse(a.trace) : [];
+      } catch {
+        traceParsed = [];
+      }
+      return { ...a, traceParsed };
+    });
+
+    return res.render("platform-login-logs", {
+      attempts,
+      tableMissing,
+      portalFilter: pf,
+      take,
+      isPlatformContext: true,
+    });
+  } catch (e) {
+    return next(e);
+  }
 });
 
 router.post("/platform/shop-admins/create", requirePlatformAdmin, async (req, res) => {
