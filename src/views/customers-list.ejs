@@ -19,6 +19,9 @@
         <a class="btn btn-outline-success" href="/dashboard/customers/export/xlsx">Exporter Excel</a>
       </div>
     </div>
+    <% if (typeof listAlert !== "undefined" && listAlert) { %>
+      <div class="alert alert-warning" role="alert"><%= listAlert %></div>
+    <% } %>
 
     <form method="GET" action="/dashboard/customers" class="row g-2 mb-3">
       <div class="col-md-3"><input class="form-control" name="q" placeholder="Nom, code ou email" value="<%= filters.q %>" /></div>

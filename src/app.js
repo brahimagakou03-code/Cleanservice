@@ -160,9 +160,33 @@ app.use("/dashboard/notifications", ...dashboardMw, notificationRoutes);
 app.use("/dashboard/guide", ...dashboardMw, guideRoutes);
 app.use("/api", requireApiAuth, apiRoutes);
 
+function sameHostReferer(req) {
+  const ref = req.get("referer");
+  if (!ref) return "";
+  try {
+    const u = new URL(ref);
+    const host = String(req.get("host") || "");
+    if (!host || u.host !== host) return "";
+    return `${u.pathname}${u.search || ""}`;
+  } catch {
+    return "";
+  }
+}
+
 app.use((err, _req, res, _next) => {
   if (err.code === "EBADCSRFTOKEN") {
-    return res.status(403).send("Token CSRF invalide.");
+    const req = _req;
+    const back = sameHostReferer(req);
+    const fallback =
+      req.path.startsWith("/dashboard/customers") || req.path.startsWith("/dashboard/")
+        ? "/dashboard/customers?err=csrf"
+        : req.path.startsWith("/portal/")
+          ? "/portal/login?err=csrf"
+          : "/login?err=csrf";
+    const target = back
+      ? `${back}${back.includes("?") ? "&" : "?"}err=csrf`
+      : fallback;
+    return res.redirect(302, target);
   }
   if (err instanceof multer.MulterError) {
     return res.status(400).send(`Envoi de fichier : ${err.message}`);

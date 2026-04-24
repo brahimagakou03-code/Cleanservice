@@ -180,6 +180,10 @@ router.get("/", async (req, res) => {
     filters: { q, isActive: isActive || "", paymentTerms, sortBy, sortDir },
     paymentTermsOptions: PAYMENT_TERMS,
     canDeleteCustomer: can(req.user.role, "clients:manage") || can(req.user.role, "*"),
+    listAlert:
+      String(req.query.err || "") === "csrf"
+        ? "Session expirée ou formulaire invalide. Rechargez la page puis réessayez."
+        : null,
   });
 });
 

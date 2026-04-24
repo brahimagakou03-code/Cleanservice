@@ -53,9 +53,33 @@ function isSameSiteAuthPost(req) {
   return false;
 }
 
+function isTrustedSameOriginPost(req) {
+  if (req.method !== "POST") return false;
+  const p = String(req.path || "");
+  if (!p.startsWith("/dashboard/") && !p.startsWith("/portal/")) return false;
+  const host = String(req.hostname || "").toLowerCase();
+  if (!host) return false;
+  const origin = req.get("origin");
+  const referer = req.get("referer");
+  if (origin) {
+    const oh = hostnameFromUrl(origin);
+    if (oh && oh === host) return true;
+  }
+  if (referer) {
+    const rh = hostnameFromUrl(referer);
+    if (rh && rh === host) return true;
+  }
+  return false;
+}
+
 function csrfWithLoginBypass(req, res, next) {
   if (isSameSiteAuthPost(req)) return next();
-  return csrfProtection(req, res, next);
+  return csrfProtection(req, res, (err) => {
+    if (err?.code === "EBADCSRFTOKEN" && isTrustedSameOriginPost(req)) {
+      return next();
+    }
+    return next(err);
+  });
 }
 
 function attachCsrfToken(req, res, next) {
